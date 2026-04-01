@@ -182,3 +182,8 @@
     border-right-color: var(--border);
   }
 }
+
+/* Inventory item tooltip */
+.inventory-item:hover .item-tooltip {
+  display: block !important;
+}

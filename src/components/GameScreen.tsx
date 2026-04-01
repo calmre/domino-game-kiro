@@ -30,10 +30,12 @@ export function GameScreen() {
   const bossModifier = useGameStore(s => s.bossModifier)
   const anchorTile = useGameStore(s => s.anchorTile)
   const items = useGameStore(s => s.items)
+  const currency = useGameStore(s => s.currency)
   const placeTile = useGameStore(s => s.placeTile)
   const discardSelected = useGameStore(s => s.discardSelected)
   const undoLastTile = useGameStore(s => s.undoLastTile)
   const playHand = useGameStore(s => s.playHand)
+  const sellItem = useGameStore(s => s.sellItem)
 
   const handlePlace = (tile: Tile) => {
     placeTile(tile)
@@ -119,6 +121,85 @@ export function GameScreen() {
       )}
 
       <div style={{ display: 'flex', gap: 16 }}>
+        {/* Left: Inventory */}
+        <div style={{
+          width: 80,
+          flexShrink: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 6,
+        }}>
+          <div style={{ fontSize: 10, color: '#f9e2af', fontFamily: 'monospace', fontWeight: 'bold', textAlign: 'center' }}>
+            💰 {currency}
+          </div>
+          {items.length === 0 ? (
+            <div style={{ fontSize: 9, color: '#45475a', fontStyle: 'italic', textAlign: 'center' }}>
+              No upgrades
+            </div>
+          ) : (
+            items.map(item => (
+              <div
+                key={item.id}
+                title={item.description}
+                className="inventory-item"
+                style={{
+                  position: 'relative',
+                  padding: '6px 4px',
+                  background: '#1a1a2e',
+                  border: '1px solid #45475a',
+                  borderRadius: 6,
+                  cursor: 'default',
+                  textAlign: 'center',
+                }}
+              >
+                <div style={{ fontSize: 9, fontFamily: 'monospace', fontWeight: 'bold', color: '#cdd6f4', lineHeight: 1.2 }}>
+                  {item.name}
+                </div>
+                <button
+                  onClick={() => sellItem(item)}
+                  style={{
+                    marginTop: 4,
+                    padding: '2px 4px',
+                    fontSize: 8,
+                    fontFamily: 'monospace',
+                    border: '1px solid #f38ba8',
+                    borderRadius: 3,
+                    background: '#3d1a1a',
+                    color: '#f38ba8',
+                    cursor: 'pointer',
+                    width: '100%',
+                  }}
+                >
+                  ${Math.floor((item.cost || 2) / 2)}
+                </button>
+                {/* Tooltip */}
+                <div style={{
+                  display: 'none',
+                  position: 'absolute',
+                  left: '100%',
+                  top: 0,
+                  marginLeft: 6,
+                  background: '#1e1e2e',
+                  border: '1px solid #89b4fa',
+                  borderRadius: 6,
+                  padding: '6px 8px',
+                  fontSize: 11,
+                  color: '#cdd6f4',
+                  whiteSpace: 'nowrap',
+                  zIndex: 100,
+                  pointerEvents: 'none',
+                  fontFamily: 'monospace',
+                }}
+                  className="item-tooltip"
+                >
+                  <div style={{ fontWeight: 'bold', color: '#89b4fa', marginBottom: 2 }}>{item.name}</div>
+                  <div>{item.description}</div>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div style={{
             padding: 12,
@@ -127,7 +208,7 @@ export function GameScreen() {
             border: '1px solid #313244',
           }}>
             <div style={{ fontSize: 12, color: '#a6adc8', marginBottom: 8, fontFamily: 'monospace' }}>
-              BOARD ({chain.tiles.length}/5)
+              BOARD
             </div>
             <BoardView
               chain={chain}
@@ -183,7 +264,7 @@ export function GameScreen() {
           flexDirection: 'column',
           gap: 10,
         }}>
-          <ScorePanel lastScore={lastScore} chain={chain} hand={hand} roundScore={roundScore} targetScore={targetScore} bossModifier={bossModifier} items={items} />
+          <ScorePanel lastScore={lastScore} chain={chain} hand={hand} roundScore={roundScore} targetScore={targetScore} bossModifier={bossModifier} items={items} anchorTile={anchorTile} />
           {bossModifier && <BossPenaltyBadge bossModifier={bossModifier} />}
         </div>
 

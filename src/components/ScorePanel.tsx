@@ -1,4 +1,4 @@
-import type { Chain, Hand, ScoringResult, BossModifier, ShopItem } from '../game/types'
+import type { Chain, Hand, ScoringResult, BossModifier, ShopItem, Tile } from '../game/types'
 import { calculateBaseScore, calculateMultiplier, calculateFinalScore } from '../game/scoring'
 
 interface ScorePanelProps {
@@ -9,13 +9,14 @@ interface ScorePanelProps {
   targetScore: number
   bossModifier?: BossModifier
   items?: ShopItem[]
+  anchorTile?: Tile | null
 }
 
-export function ScorePanel({ lastScore, chain, hand, roundScore, targetScore, bossModifier, items = [] }: ScorePanelProps) {
-  const base = calculateBaseScore(chain, bossModifier, items, null)
+export function ScorePanel({ lastScore, chain, hand, roundScore, targetScore, bossModifier, items = [], anchorTile = null }: ScorePanelProps) {
+  const base = calculateBaseScore(chain, bossModifier, items, anchorTile)
   const handEmpty = hand.length === 0
-  const mult = calculateMultiplier(chain, bossModifier, handEmpty, items, hand.length)
-  const final = calculateFinalScore(chain, bossModifier, handEmpty, items, null, hand.length)
+  const mult = calculateMultiplier(chain, bossModifier, handEmpty, items, hand.length, anchorTile)
+  const final = calculateFinalScore(chain, bossModifier, handEmpty, items, anchorTile, hand.length)
 
   return (
     <div style={{ fontFamily: 'monospace', fontSize: 14, color: '#cdd6f4', display: 'flex', flexDirection: 'column', gap: 4 }}>

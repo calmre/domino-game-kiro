@@ -11,18 +11,19 @@ export function initChain(tile: Tile, anchorTile?: Tile): Chain {
 
   if (anchorTile) {
     // First tile must connect to anchor's open end
+    // Anchor's open end is always on the right side visually
     // Determine which end of the tile matches the anchor
     const canConnectLeft = tile.left === anchorTile.left || tile.left === anchorTile.right
     const canConnectRight = tile.right === anchorTile.left || tile.right === anchorTile.right
 
-    if (canConnectRight) {
-      // Right end connects to anchor, left end is open
+    if (canConnectLeft) {
+      // Left end connects to anchor, so don't flip (left connects, right is open)
       placed = { tile, flipped: false, brokenLink: false }
-      openEnd = tile.left
-    } else if (canConnectLeft) {
-      // Left end connects to anchor, right end is open
-      placed = { tile, flipped: true, brokenLink: false }
       openEnd = tile.right
+    } else if (canConnectRight) {
+      // Right end connects to anchor, so flip (right connects, left is open)
+      placed = { tile, flipped: true, brokenLink: false }
+      openEnd = tile.left
     } else {
       // Broken link with anchor
       placed = { tile, flipped: false, brokenLink: true }
@@ -30,8 +31,9 @@ export function initChain(tile: Tile, anchorTile?: Tile): Chain {
     }
   } else {
     // No anchor, just place the tile normally
+    // Both ends are open until second tile is placed
     placed = { tile, flipped: false, brokenLink: false }
-    openEnd = tile.right
+    openEnd = -1  // Special value: both ends open
   }
 
   return { tiles: [placed], openEnd }
@@ -61,29 +63,44 @@ export function placeTile(chain: Chain, tile: Tile): Chain {
     const firstTile = chain.tiles[0].tile
     const firstTileFlipped = chain.tiles[0].flipped
     
-    // Get the actual open ends of the first tile (considering orientation)
-    const firstTileLeftEnd = firstTileFlipped ? firstTile.right : firstTile.left
-    const firstTileRightEnd = firstTileFlipped ? firstTile.left : firstTile.right
-    
-    // Check which end of the second tile can connect
-    const canConnectToLeft = tile.left === firstTileLeftEnd || tile.right === firstTileLeftEnd
-    const canConnectToRight = tile.left === firstTileRightEnd || tile.right === firstTileRightEnd
+    // Check which end of the second tile can connect to which end of the first tile
+    const secondTileMatchesFirstLeft = tile.left === firstTile.left || tile.right === firstTile.left
+    const secondTileMatchesFirstRight = tile.left === firstTile.right || tile.right === firstTile.right
     
     let flipped = false
     let newOpenEnd: number
     let brokenLink = false
-    let newFirstTileFlipped = firstTileFlipped
+    let newFirstTileFlipped = false
     
-    if (canConnectToRight) {
-      // Connect to right end of first tile (preferred)
-      flipped = tile.right === firstTileRightEnd
-      newOpenEnd = flipped ? tile.left : tile.right
-      newFirstTileFlipped = false  // First tile right end is connected
-    } else if (canConnectToLeft) {
-      // Connect to left end of first tile
-      flipped = tile.right === firstTileLeftEnd
-      newOpenEnd = flipped ? tile.left : tile.right
-      newFirstTileFlipped = true  // First tile left end is connected
+    // Prefer connecting to the right end of the first tile
+    if (secondTileMatchesFirstRight) {
+      // Second tile connects to first tile's right end
+      // First tile stays not flipped (right end connects, left end is open)
+      newFirstTileFlipped = false
+      
+      if (tile.left === firstTile.right) {
+        // tile.left connects, so tile is not flipped
+        flipped = false
+        newOpenEnd = tile.right
+      } else {
+        // tile.right connects, so tile is flipped
+        flipped = true
+        newOpenEnd = tile.left
+      }
+    } else if (secondTileMatchesFirstLeft) {
+      // Second tile connects to first tile's left end
+      // First tile gets flipped (left end connects, right end is open)
+      newFirstTileFlipped = true
+      
+      if (tile.left === firstTile.left) {
+        // tile.left connects, so tile is not flipped
+        flipped = false
+        newOpenEnd = tile.right
+      } else {
+        // tile.right connects, so tile is flipped
+        flipped = true
+        newOpenEnd = tile.left
+      }
     } else {
       // Broken link
       brokenLink = true
@@ -106,11 +123,18 @@ export function placeTile(chain: Chain, tile: Tile): Chain {
     let brokenLink = false
 
     if (matches) {
-      // Orient so matching pip connects
-      flipped = tile.right === openEnd
-      newOpenEnd = flipped ? tile.left : tile.right
+      // Determine which end of the tile matches and how to orient it
+      if (tile.left === openEnd) {
+        // Left end matches, so tile is not flipped (left connects, right is open)
+        flipped = false
+        newOpenEnd = tile.right
+      } else {
+        // Right end matches, so tile is flipped (right connects, left is open)
+        flipped = true
+        newOpenEnd = tile.left
+      }
     } else {
-      // Broken link — place left-to-right, openEnd = tile.right
+      // Broken link — place not flipped
       brokenLink = true
       flipped = false
       newOpenEnd = tile.right

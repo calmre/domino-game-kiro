@@ -70,10 +70,19 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
 
   startRound() {
     const state = get()
-    const { bossModifier } = state
+    const { bossModifier, items } = state
     
-    // Hand size starts at 6 (max hand size)
+    // Hand size is capped at 6
     const handSize = bossModifier?.type === 'reduced_hand' ? bossModifier.size : 6
+    
+    // Calculate max hands: base 3 + bigger_sack upgrades
+    let baseMaxHands = 3
+    for (const item of items) {
+      if (item.effect.type === 'bigger_sack') {
+        baseMaxHands += item.effect.amount
+      }
+    }
+    
     const maxDiscards = bossModifier?.type === 'no_discards' ? 0 : 3  // Increased to 3
     const { hand, pool: poolAfterDeal } = dealHand(state.pool, handSize)
 
@@ -85,9 +94,10 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       discardCount: 0,
       maxDiscards,
       handsPlayed: 0,
-      maxHands: 3,
+      maxHands: baseMaxHands,
       roundScore: 0,
       phase: 'round',
+      anchorTile: null,  // No anchor at start of round
     })
   },
 
@@ -192,6 +202,10 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     const newAnchorTile = state.chain.tiles.length > 0 
       ? state.chain.tiles[state.chain.tiles.length - 1].tile 
       : null
+    
+    console.log('playHand - current anchorTile:', state.anchorTile)
+    console.log('playHand - newAnchorTile for next hand:', newAnchorTile)
+    console.log('playHand - handsPlayed:', state.handsPlayed, '→', newHandsPlayed)
 
     if (cleared || outOfHands) {
       // If cleared, generate random shop items for the shop phase
@@ -268,6 +282,8 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       discardPool: [],  // Reset discard pool
       shopItems: [],    // Clear shop items
       shopPurchases: 0, // Reset purchase counter
+      items: state.items,  // PRESERVE items across rounds
+      currency: state.currency,  // PRESERVE currency
       phase: isBoss ? 'boss_intro' : 'round' 
     })
     if (!isBoss) get().startRound()

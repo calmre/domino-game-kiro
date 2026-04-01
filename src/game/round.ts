@@ -65,7 +65,7 @@ export function evaluateRoundWithAnchor(
   const baseScore = calculateBaseScore(chainCopy, bossModifier, items, anchorTile)
   
   // Calculate multiplier with Domino Soul rules (handEmpty parameter for Domino bonus)
-  const multiplier = calculateMultiplier(chainCopy, bossModifier, hasDominoBonus, items, hand.length)
+  const multiplier = calculateMultiplier(chainCopy, bossModifier, hasDominoBonus, items, hand.length, anchorTile)
   
   // Calculate final score (Domino bonus already applied in calculateMultiplier)
   const finalScore = Math.floor(baseScore * multiplier.total)

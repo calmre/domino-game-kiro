@@ -6,13 +6,45 @@ import { findLongestChain } from './chainFinder'
  * Each 0 pip counts as 7 points.
  * Tiles with broken links do NOT contribute to base score.
  * frozen_bone: doubles contribute 0 pips.
- * lead_weight: subtract 5 from total (floor 0).
  */
 export function calculateBaseScore(chain: Chain, bossModifier?: BossModifier, items: ShopItem[] = [], anchorTile?: Tile | null): number {
-  // No tiles = no score
-  if (chain.tiles.length === 0) return 0
+  // Start with anchor tile if present
+  let base = 0
   
-  let base = chain.tiles.reduce((sum, pt) => {
+  console.log('calculateBaseScore - anchorTile:', anchorTile)
+  
+  if (anchorTile) {
+    // Add anchor tile pips to base score
+    let anchorLeft = anchorTile.left
+    let anchorRight = anchorTile.right
+    
+    console.log('Anchor pips:', anchorLeft, anchorRight)
+    
+    // Check for Zero Gravity upgrade
+    const hasZeroGravity = items.some(item => item.effect.type === 'zero_gravity')
+    if (hasZeroGravity) {
+      anchorLeft = anchorLeft === 0 ? 10 : anchorLeft
+      anchorRight = anchorRight === 0 ? 10 : anchorRight
+    } else {
+      anchorLeft = anchorLeft === 0 ? 7 : anchorLeft
+      anchorRight = anchorRight === 0 ? 7 : anchorRight
+    }
+    
+    // Check for Heavy Lead upgrade
+    const hasHeavyLead = items.some(item => item.effect.type === 'heavy_lead')
+    if (hasHeavyLead) {
+      if (anchorTile.left === 6) anchorLeft += 5
+      if (anchorTile.right === 6) anchorRight += 5
+    }
+    
+    base += anchorLeft + anchorRight
+    console.log('Base score from anchor:', base)
+  }
+  
+  // No tiles = just anchor score
+  if (chain.tiles.length === 0) return base
+  
+  base += chain.tiles.reduce((sum, pt) => {
     // Skip tiles with broken links - they don't contribute to base score
     if (pt.brokenLink) return sum
     
@@ -35,17 +67,15 @@ export function calculateBaseScore(chain: Chain, bossModifier?: BossModifier, it
     // Check for Heavy Lead upgrade
     const hasHeavyLead = items.some(item => item.effect.type === 'heavy_lead')
     if (hasHeavyLead) {
-      if (pt.tile.left === 6 || pt.tile.right === 6) {
-        leftPip += 5
-        rightPip += 5
-      }
+      if (pt.tile.left === 6) leftPip += 5
+      if (pt.tile.right === 6) rightPip += 5
     }
     
     return sum + leftPip + rightPip
   }, 0)
   
   // Apply boss modifier penalties
-  if (bossModifier?.type === 'lead_weight') base = Math.max(0, base - 5)
+  // (none currently)
   
   // Apply score_bonus upgrades
   let scoreBonusAdd = 0
@@ -56,22 +86,7 @@ export function calculateBaseScore(chain: Chain, bossModifier?: BossModifier, it
     }
   }
   
-  // Apply Lead Weight upgrade (anchor tile adds its pip value)
-  const hasLeadWeight = items.some(item => item.effect.type === 'lead_weight')
-  if (hasLeadWeight && anchorTile) {
-    let anchorPipValue = 0
-    if (anchorTile.left === 0) {
-      anchorPipValue += items.some(item => item.effect.type === 'zero_gravity') ? 10 : 7
-    } else {
-      anchorPipValue += anchorTile.left
-    }
-    if (anchorTile.right === 0) {
-      anchorPipValue += items.some(item => item.effect.type === 'zero_gravity') ? 10 : 7
-    } else {
-      anchorPipValue += anchorTile.right
-    }
-    base += anchorPipValue
-  }
+  // Remove Lead Weight upgrade logic (already handled by including anchor in base)
   
   return base + scoreBonusAdd
 }
@@ -82,54 +97,52 @@ export function calculateBaseScore(chain: Chain, bossModifier?: BossModifier, it
  * Note: 0 counts as both 0 AND 7 for run detection
  * Runs can be ascending (0,1,2,3) or descending (6,5,4,3)
  */
-function checkSequentialRun(chain: Chain): boolean {
-  if (chain.tiles.length < 2) return false
+function checkSequentialRun(chain: Chain, anchorTile?: Tile | null): boolean {
+  if (chain.tiles.length < 2 && !anchorTile) return false
   
-  // Extract pips in order from the chain
+  // Extract pips in the order they appear in the chain
   const pipsInOrder: number[] = []
   
-  // Add the left pip of the first tile
-  pipsInOrder.push(chain.tiles[0].tile.left)
+  // Add anchor pips first if present
+  if (anchorTile) {
+    pipsInOrder.push(anchorTile.left)
+    pipsInOrder.push(anchorTile.right)
+  }
   
-  // Add all right pips (which are the open ends as we go through the chain)
   for (const pt of chain.tiles) {
-    pipsInOrder.push(pt.tile.right)
+    // Get the displayed left and right values
+    const displayLeft = pt.flipped ? pt.tile.right : pt.tile.left
+    const displayRight = pt.flipped ? pt.tile.left : pt.tile.right
+    
+    // Add both pips from each tile
+    pipsInOrder.push(displayLeft)
+    pipsInOrder.push(displayRight)
   }
   
-  // Get unique pips
-  const uniquePips = new Set<number>()
-  for (const pip of pipsInOrder) {
-    uniquePips.add(pip)
-  }
+  // Need at least 2 pips to form a run
+  if (pipsInOrder.length < 2) return false
   
-  // Convert to sorted array
-  let sortedPips = [...uniquePips].sort((a, b) => a - b)
-  
-  // Check if sorted pips form a consecutive sequence (ascending)
-  let isAscending = true
-  for (let i = 1; i < sortedPips.length; i++) {
-    const diff = sortedPips[i] - sortedPips[i - 1]
-    // Allow diff of 1, or diff of 6 if we're wrapping from 0 to 7
-    if (diff !== 1 && !(sortedPips[i - 1] === 0 && sortedPips[i] === 7)) {
-      isAscending = false
+  // Check if pips form a sequential run (each pip differs by 1 from the previous)
+  // Allow for 0 counting as both 0 and 7
+  // Also allow same pip (difference of 0) for doubles
+  let isSequential = true
+  for (let i = 1; i < pipsInOrder.length; i++) {
+    const prev = pipsInOrder[i - 1]
+    const curr = pipsInOrder[i]
+    const diff = curr - prev
+    
+    // Check if difference is +1, -1, 0 (same), or wrapping (0→7 or 7→0)
+    const isValidDiff = diff === 0 || diff === 1 || diff === -1 || 
+                        (prev === 0 && curr === 7) || 
+                        (prev === 7 && curr === 0)
+    
+    if (!isValidDiff) {
+      isSequential = false
       break
     }
   }
   
-  if (isAscending) return true
-  
-  // Check if sorted pips form a consecutive sequence (descending)
-  let isDescending = true
-  for (let i = 1; i < sortedPips.length; i++) {
-    const diff = sortedPips[i - 1] - sortedPips[i]
-    // Allow diff of 1, or diff of 6 if we're wrapping from 7 to 0
-    if (diff !== 1 && !(sortedPips[i - 1] === 7 && sortedPips[i] === 0)) {
-      isDescending = false
-      break
-    }
-  }
-  
-  return isDescending
+  return isSequential
 }
 
 /**
@@ -146,10 +159,31 @@ export function calculateMultiplier(
   bossModifier?: BossModifier,
   handEmpty: boolean = false,
   items: ShopItem[] = [],
-  handSize: number = 0
+  handSize: number = 0,
+  anchorTile?: Tile | null
 ): MultiplierBreakdown {
   const tiles = chain.tiles
-  if (tiles.length === 0) {
+  
+  // Special case: anchor only, no tiles placed yet
+  if (tiles.length === 0 && anchorTile) {
+    // Anchor gives ×1 chain bonus
+    let doubleMultiplier = 1.0
+    if (anchorTile.left === anchorTile.right && bossModifier?.type !== 'frozen_bone') {
+      doubleMultiplier = 1.25  // Anchor is a double
+    }
+    
+    return {
+      chainLength: 1,
+      chainBonus: 1.0,
+      doubleMultiplier,
+      runMultiplier: 1.0,
+      brokenLinks: 0,
+      dominoBonus: false,
+      total: 1.0 * doubleMultiplier
+    }
+  }
+  
+  if (tiles.length === 0 && !anchorTile) {
     return { 
       chainLength: 0, 
       chainBonus: 0, 
@@ -162,22 +196,38 @@ export function calculateMultiplier(
   }
 
   // 1. CHAIN: Find longest continuous sequence of matching ends
+  // Include anchor in chain calculation
   const { maxChainLength, chainMult, chainCount } = findLongestChain(tiles)
+  
+  // If anchor exists, it provides a base ×1 multiplier, and each tile adds +1
+  // So: anchor alone = ×1, anchor + 1 tile = ×2, anchor + 2 tiles = ×3, etc.
+  let finalChainLength = maxChainLength
+  let finalChainMult = chainMult
+  
+  if (anchorTile) {
+    // Anchor gives free ×1, each matching tile adds +1
+    finalChainLength = maxChainLength + 1
+    finalChainMult = Math.min(finalChainLength, 6)  // Cap at ×6
+  }
   
   // Count broken links (for display only - doesn't affect run bonus anymore)
   const brokenLinks = tiles.filter(tile => tile.brokenLink).length
   
   // 2. RUN: Check if total pips form sequential +1 order
+  // Include anchor in run detection
   let runMultiplier = 1.0
-  // Safety Check: Broken chain doesn't necessarily break a run (separate logic)
   if (bossModifier?.type !== 'sandpaper') {
-    if (checkSequentialRun(chain)) {
+    if (checkSequentialRun(chain, anchorTile)) {
       runMultiplier = 1.5  // ×1.5 for sequential run
     }
   }
   
   // 3. DOUBLES: Count double tiles and calculate multiplier
+  // Include anchor if it's a double
   let doubleCount = 0
+  if (anchorTile && anchorTile.left === anchorTile.right && bossModifier?.type !== 'frozen_bone') {
+    doubleCount++
+  }
   for (const pt of tiles) {
     if (pt.tile.left === pt.tile.right && bossModifier?.type !== 'frozen_bone') {
       doubleCount++
@@ -229,12 +279,12 @@ export function calculateMultiplier(
   }
   
   // Apply chain bonus upgrade (Long Link: +1.5 per tile instead of +1)
-  let finalChainMult = chainMult
+  let adjustedChainMult = finalChainMult
   if (hasLongLink) {
     // Long Link increases chain bonus per tile
-    finalChainMult = 1 + (maxChainLength * (1 + longLinkAmount))
+    adjustedChainMult = 1 + (finalChainLength * (1 + longLinkAmount))
   } else {
-    finalChainMult = chainMult + chainBonusAdd
+    adjustedChainMult = finalChainMult + chainBonusAdd
   }
   
   // Apply double boost upgrade (increase base double multiplier)
@@ -267,7 +317,7 @@ export function calculateMultiplier(
   
   // 6. CALCULATE TOTAL MULTIPLIER according to order:
   // (ChainBonus) * (RunMult) * (DoubleMults) * (DominoMult) * (PerfectLoop) * (SlimFit)
-  let total = finalChainMult  // Start with chain bonus as direct multiplier
+  let total = adjustedChainMult  // Start with chain bonus as direct multiplier
   total *= runMultiplier
   total *= doubleMultiplier
   total *= dominoMultiplier
@@ -281,8 +331,8 @@ export function calculateMultiplier(
   total = Math.max(1.0, total)
   
   return { 
-    chainLength: maxChainLength, 
-    chainBonus: finalChainMult, 
+    chainLength: finalChainLength, 
+    chainBonus: adjustedChainMult, 
     doubleMultiplier, 
     runMultiplier, 
     brokenLinks, 
@@ -303,6 +353,6 @@ export function calculateFinalScore(
   handSize: number = 0
 ): number {
   const baseScore = calculateBaseScore(chain, bossModifier, items, anchorTile)
-  const multiplier = calculateMultiplier(chain, bossModifier, handEmpty, items, handSize)
+  const multiplier = calculateMultiplier(chain, bossModifier, handEmpty, items, handSize, anchorTile)
   return Math.floor(baseScore * multiplier.total)
 }

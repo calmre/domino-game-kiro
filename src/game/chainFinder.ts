@@ -24,12 +24,14 @@ export function findLongestChain(playedTiles: PlacedTile[]): {
     const prevTile = playedTiles[i - 1]
     const currentTile = playedTiles[i]
     
-    // Get the open end of the previous tile (the end that's not connected)
+    // Get the open end of the previous tile
+    // If NOT flipped: right side is open
+    // If flipped: left side is open
     const prevEnd = prevTile.flipped ? prevTile.tile.left : prevTile.tile.right
     
-    // Get the connecting end of the current tile (the end that should match prevEnd)
-    // If the current tile is flipped, it connects at the right end
-    // If not flipped, it connects at the left end
+    // Get the connecting end of the current tile
+    // If NOT flipped: left side connects
+    // If flipped: right side connects
     const currentConnectingEnd = currentTile.flipped ? currentTile.tile.right : currentTile.tile.left
     
     if (prevEnd === currentConnectingEnd && !prevTile.brokenLink && !currentTile.brokenLink) {

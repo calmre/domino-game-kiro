@@ -76,7 +76,6 @@ export type ItemEffect =
   | { type: 'double_boost'; amount: number }
   | { type: 'zero_gravity' }
   | { type: 'heavy_lead' }
-  | { type: 'lead_weight' }
   | { type: 'long_link'; amount: number }
   | { type: 'sequential_spark' }
   | { type: 'perfect_loop' }
