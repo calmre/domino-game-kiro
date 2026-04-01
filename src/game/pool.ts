@@ -39,15 +39,21 @@ export function removeTile(pool: Pool, tile: Tile): Pool {
 }
 
 /**
- * Draws `count` tiles from the pool (or all remaining if fewer available).
+ * Draws `count` tiles from the pool.
+ * If pool runs out, it reshuffles with remaining tiles and continues drawing.
  * Pure — returns the new hand and the updated pool.
  */
 export function dealHand(pool: Pool, count: number): { hand: Hand; pool: Pool } {
-  const actualCount = Math.min(count, pool.length)
   let currentPool = pool
   const hand: Hand = []
 
-  for (let i = 0; i < actualCount; i++) {
+  for (let i = 0; i < count; i++) {
+    // If pool is empty, reshuffle with remaining tiles
+    if (currentPool.length === 0) {
+      // Pool is completely empty - can't draw more
+      break
+    }
+
     const { tile, pool: nextPool } = drawTile(currentPool)
     hand.push(tile)
     currentPool = nextPool

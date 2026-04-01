@@ -32,10 +32,12 @@ export type Hand = Tile[]
 /** Breakdown of how the multiplier was computed. */
 export interface MultiplierBreakdown {
   chainLength: number   // based on longest unbroken segment
-  doubleBonus: number   // 0.5 per double tile in unbroken segments
-  runBonus: number      // 1 per consecutive pip-increment in unbroken segments
+  chainBonus: number    // additive bonus: +2 for 3 tiles, +3 for 4, +4 for 5
+  doubleMultiplier: number // multiplicative: x1.25 per double
+  runMultiplier: number    // multiplicative: x1.5 for 3-tile run, x1.75 for 5-tile run
   brokenLinks: number   // count of broken link connections
-  total: number         // max(1, chainLength + doubleBonus + runBonus)
+  dominoBonus: boolean  // x1.75 multiplier if hand is empty (Domino! bonus)
+  total: number         // final multiplier after all calculations
 }
 
 /** Configuration for a single blind. */
@@ -52,6 +54,8 @@ export type BossModifier =
   | { type: 'sandpaper'; name: 'The Sandpaper'; description: 'Run Bonus is disabled this round.' }
   | { type: 'lead_weight'; name: 'The Lead Weight'; description: 'Each hand loses 5 from its base score.' }
   | { type: 'frozen_bone'; name: 'The Frozen Bone'; description: 'Double tiles contribute 0 pips and 0 bonus.' }
+  | { type: 'reduced_hand'; name: 'The Small Hand'; description: 'Hand size reduced to 4 tiles.'; size: number }
+  | { type: 'no_discards'; name: 'The Iron Grip'; description: 'No discards allowed this round.' }
 
 /** An item available in the shop. */
 export interface ShopItem {
@@ -68,15 +72,27 @@ export type ItemEffect =
   | { type: 'score_bonus'; flat: number }
   | { type: 'multiplier_bonus'; amount: number }
   | { type: 'restore_tile'; tile: Tile }
+  | { type: 'chain_bonus'; amount: number }
+  | { type: 'double_boost'; amount: number }
+  | { type: 'zero_gravity' }
+  | { type: 'heavy_lead' }
+  | { type: 'lead_weight' }
+  | { type: 'long_link'; amount: number }
+  | { type: 'sequential_spark' }
+  | { type: 'perfect_loop' }
+  | { type: 'bigger_sack'; amount: number }
+  | { type: 'slim_fit' }
 
 /** The complete game state. */
 export interface GameState {
   phase: 'menu' | 'round' | 'scoring' | 'shop' | 'boss_intro' | 'game_over'
   pool: Pool
+  discardPool: Pool        // Tiles that have been discarded (cannot be played this round)
   hand: Hand
   chain: Chain
+  anchorTile: Tile | null    // Last tile from previous hand (persistent board state)
   discardCount: number      // discards used this round
-  maxDiscards: number       // default 4, may be modified by boss modifier
+  maxDiscards: number       // default 3, may be modified by boss modifier
   handsPlayed: number       // hands played this blind (max 3)
   maxHands: number          // default 3
   roundScore: number        // accumulated score across hands this blind
@@ -85,6 +101,8 @@ export interface GameState {
   targetScore: number
   currency: number
   items: ShopItem[]
+  shopItems: ShopItem[]     // Current shop offerings (3 random items)
+  shopPurchases: number     // Number of purchases made in current shop visit (max 3)
   lastScore?: ScoringResult
   bossModifier?: BossModifier
 }
@@ -95,4 +113,5 @@ export interface ScoringResult {
   multiplier: MultiplierBreakdown
   finalScore: number
   cleared: boolean
+  goldEarned: number
 }

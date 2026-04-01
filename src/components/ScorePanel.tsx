@@ -1,18 +1,21 @@
-import type { Chain, ScoringResult, BossModifier } from '../game/types'
+import type { Chain, Hand, ScoringResult, BossModifier, ShopItem } from '../game/types'
 import { calculateBaseScore, calculateMultiplier, calculateFinalScore } from '../game/scoring'
 
 interface ScorePanelProps {
   lastScore?: ScoringResult
   chain: Chain
+  hand: Hand
   roundScore: number
   targetScore: number
   bossModifier?: BossModifier
+  items?: ShopItem[]
 }
 
-export function ScorePanel({ lastScore, chain, roundScore, targetScore, bossModifier }: ScorePanelProps) {
-  const base = calculateBaseScore(chain, bossModifier)
-  const mult = calculateMultiplier(chain, bossModifier)
-  const final = calculateFinalScore(chain, bossModifier)
+export function ScorePanel({ lastScore, chain, hand, roundScore, targetScore, bossModifier, items = [] }: ScorePanelProps) {
+  const base = calculateBaseScore(chain, bossModifier, items, null)
+  const handEmpty = hand.length === 0
+  const mult = calculateMultiplier(chain, bossModifier, handEmpty, items, hand.length)
+  const final = calculateFinalScore(chain, bossModifier, handEmpty, items, null, hand.length)
 
   return (
     <div style={{ fontFamily: 'monospace', fontSize: 14, color: '#cdd6f4', display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -31,16 +34,41 @@ export function ScorePanel({ lastScore, chain, roundScore, targetScore, bossModi
         <div>Base: <span style={{ color: '#f9e2af' }}>{base}</span></div>
         <div style={{ marginTop: 4, color: '#a6adc8', fontSize: 12 }}>Multiplier:</div>
         <div style={{ paddingLeft: 8, display: 'flex', flexDirection: 'column', gap: 2, fontSize: 13 }}>
-          <div>Chain Bonus: <span style={{ color: '#cba6f7' }}>×{mult.chainLength}</span></div>
-          <div>Double Bonus: <span style={{ color: '#cba6f7' }}>+{mult.doubleBonus}</span></div>
-          <div>Run Bonus: <span style={{ color: '#cba6f7' }}>+{mult.runBonus}</span></div>
+          <div>
+            Chain Bonus: 
+            <span style={{ color: '#cba6f7' }}>
+              ×{mult.chainBonus}
+            </span>
+            {mult.chainLength > 0 && (
+              <span style={{ fontSize: 11, color: '#a6adc8', marginLeft: 4 }}>
+                ({mult.chainLength} tiles)
+              </span>
+            )}
+          </div>
+          <div>
+            Run Multiplier: 
+            <span style={{ color: '#cba6f7' }}>
+              ×{mult.runMultiplier.toFixed(2)}
+            </span>
+            {mult.runMultiplier === 1.5 && (
+              <span style={{ fontSize: 11, color: '#a6e3a1', marginLeft: 4 }}>
+                (sequential +1)
+              </span>
+            )}
+          </div>
+          <div>Double Multiplier: <span style={{ color: '#cba6f7' }}>×{mult.doubleMultiplier.toFixed(2)}</span></div>
+          {mult.dominoBonus && (
+            <div style={{ color: '#a6e3a1', fontWeight: 'bold' }}>
+              🎯 Domino! Bonus: <span style={{ color: '#a6e3a1' }}>×1.75</span>
+            </div>
+          )}
           <div style={{ borderTop: '1px solid #45475a', paddingTop: 2 }}>
-            Total: <span style={{ color: '#cba6f7', fontWeight: 'bold' }}>×{mult.total}</span>
+            Total: <span style={{ color: '#cba6f7', fontWeight: 'bold' }}>×{mult.total.toFixed(2)}</span>
           </div>
         </div>
         {mult.brokenLinks > 0 && (
           <div style={{ fontSize: 12, color: '#f38ba8', marginTop: 2 }}>
-            Broken Links: {mult.brokenLinks}
+            ⚠️ {mult.brokenLinks} broken link{mult.brokenLinks > 1 ? 's' : ''} — Run multiplier deactivated
           </div>
         )}
         <div style={{ marginTop: 4, fontWeight: 'bold' }}>

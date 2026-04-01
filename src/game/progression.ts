@@ -13,16 +13,18 @@ export function getBossModifier(ante: number): BossModifier {
 }
 
 /**
- * Score targets:
- * Small Blind (index 0): 300 * 2.5^(ante-1), rounded to nearest 50
- * Big Blind   (index 1): Small * 1.5
- * Boss Match  (index 2): Small * 2.0
+ * Score targets with 1.5x growth rate:
+ * Base Target: 600
+ * Formula: Target = 600 * (1.5 ^ (ante - 1)) * BlindModifier
+ * Blind Modifiers: Small Blind (x1.0), Big Blind (x1.5), Boss Blind (x2.0)
+ * Target for Ante 1 Boss should be 1,200
  */
 export function getBlindConfig(ante: number, blindIndex: number): BlindConfig {
   const isBoss = blindIndex === 2
-  const smallBlind = Math.round((300 * Math.pow(2.5, ante - 1)) / 50) * 50
-  const multipliers = [1, 1.5, 2.0]
-  const targetScore = Math.round(smallBlind * multipliers[blindIndex])
+  const baseTarget = 600
+  const anteMultiplier = Math.pow(1.5, ante - 1)
+  const blindMultipliers = [1.0, 1.5, 2.0]
+  const targetScore = Math.round(baseTarget * anteMultiplier * blindMultipliers[blindIndex])
 
   return {
     ante,

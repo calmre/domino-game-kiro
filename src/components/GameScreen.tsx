@@ -12,6 +12,7 @@ import { RulesPanel } from './RulesPanel'
 export function GameScreen() {
   const [discardMode, setDiscardMode] = useState(false)
   const [selectedForDiscard, setSelectedForDiscard] = useState<Set<string>>(new Set())
+  const [ghostTile, setGhostTile] = useState<Tile | null>(null)
 
   const phase = useGameStore(s => s.phase)
   const pool = useGameStore(s => s.pool)
@@ -27,6 +28,8 @@ export function GameScreen() {
   const targetScore = useGameStore(s => s.targetScore)
   const lastScore = useGameStore(s => s.lastScore)
   const bossModifier = useGameStore(s => s.bossModifier)
+  const anchorTile = useGameStore(s => s.anchorTile)
+  const items = useGameStore(s => s.items)
   const placeTile = useGameStore(s => s.placeTile)
   const discardSelected = useGameStore(s => s.discardSelected)
   const undoLastTile = useGameStore(s => s.undoLastTile)
@@ -53,16 +56,41 @@ export function GameScreen() {
   }
 
   const handleToggleDiscard = () => {
-    if (!discardMode && chain.tiles.length > 0) {
-      // Entering discard mode — return board tiles to hand
-      const boardTiles = chain.tiles.map(pt => pt.tile)
-      useGameStore.setState(s => ({
-        hand: [...s.hand, ...boardTiles],
-        chain: { tiles: [], openEnd: 0 },
-      }))
-    }
+    // Just toggle discard mode - don't affect the board
     setDiscardMode(m => !m)
     setSelectedForDiscard(new Set())
+  }
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    // Show ghost tile when dragging over board
+    const tileData = e.dataTransfer.getData('tile')
+    if (tileData) {
+      try {
+        const tile = JSON.parse(tileData)
+        setGhostTile(tile)
+      } catch {
+        // Invalid tile data
+      }
+    }
+  }
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    setGhostTile(null)
+    const tileData = e.dataTransfer.getData('tile')
+    if (tileData) {
+      try {
+        const tile = JSON.parse(tileData)
+        placeTile(tile)
+      } catch {
+        // Invalid tile data
+      }
+    }
+  }
+
+  const handleBoardDragLeave = () => {
+    setGhostTile(null)
   }
 
   return (
@@ -101,15 +129,25 @@ export function GameScreen() {
             <div style={{ fontSize: 12, color: '#a6adc8', marginBottom: 8, fontFamily: 'monospace' }}>
               BOARD ({chain.tiles.length}/5)
             </div>
-            <BoardView chain={chain} onUndoLast={undoLastTile} />
+            <BoardView
+              chain={chain}
+              anchorTile={anchorTile}
+              onUndoLast={undoLastTile}
+              onDragOver={handleDragOver}
+              onDrop={handleDrop}
+              ghostTile={ghostTile}
+            />
           </div>
 
-          <div style={{
-            padding: 12,
-            background: '#1e1e2e',
-            borderRadius: 8,
-            border: '1px solid #313244',
-          }}>
+          <div
+            style={{
+              padding: 12,
+              background: '#1e1e2e',
+              borderRadius: 8,
+              border: '1px solid #313244',
+            }}
+            onDragLeave={handleBoardDragLeave}
+          >
             <div style={{ fontSize: 12, color: '#a6adc8', marginBottom: 8, fontFamily: 'monospace' }}>HAND</div>
             <HandView
               hand={hand}
@@ -145,7 +183,7 @@ export function GameScreen() {
           flexDirection: 'column',
           gap: 10,
         }}>
-          <ScorePanel lastScore={lastScore} chain={chain} roundScore={roundScore} targetScore={targetScore} bossModifier={bossModifier} />
+          <ScorePanel lastScore={lastScore} chain={chain} hand={hand} roundScore={roundScore} targetScore={targetScore} bossModifier={bossModifier} items={items} />
           {bossModifier && <BossPenaltyBadge bossModifier={bossModifier} />}
         </div>
 
