@@ -31,6 +31,13 @@ export function ShopScreen() {
     })
   }
 
+  // Total purchasing power = current gold + sell value of all owned items
+  const totalPurchasingPower = currency + items.reduce((sum, item) => sum + Math.floor(item.cost / 2), 0)
+  const anyAffordable = shopItems.some(item => totalPurchasingPower >= item.cost && !isItemOwned(item))
+  const visibleShopItems = anyAffordable
+    ? shopItems.filter(item => totalPurchasingPower >= item.cost || isItemOwned(item))
+    : shopItems
+
   const handleBuy = (item: ShopItem) => {
     if (currency >= item.cost && items.length < 5 && shopPurchases < 3) {
       purchaseItem(item)
@@ -114,7 +121,7 @@ export function ShopScreen() {
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {shopItems.length === 0 ? (
+          {visibleShopItems.length === 0 ? (
             <div style={{ 
               padding: 40, 
               textAlign: 'center', 
@@ -126,7 +133,7 @@ export function ShopScreen() {
               No shop items available
             </div>
           ) : (
-            shopItems.map(item => {
+            visibleShopItems.map(item => {
               const canAfford = currency >= item.cost
               const alreadyOwned = isItemOwned(item)
               const upgradesFull = items.length >= 5

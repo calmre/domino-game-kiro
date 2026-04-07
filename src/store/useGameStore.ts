@@ -12,13 +12,16 @@ interface GameActions {
   placeTile(tile: Tile): void
   discardSelected(tiles: Tile[]): void
   undoLastTile(): void
-  playHand(): void   // score current chain, redeal, decrement hands remaining
+  playHand(): void
   leaveShop(): void
   purchaseItem(item: ShopItem): void
   sellItem(item: ShopItem): void
+  startDebugRun(): void
+  setDebugItems(items: ShopItem[]): void
+  setDebugBoss(boss: import('../game/types').BossModifier | null): void
 }
 
-const INITIAL_STATE: GameState = {
+const INITIAL_STATE: GameState & { debugMode: boolean } = {
   phase: 'menu',
   pool: [],
   discardPool: [],
@@ -26,20 +29,23 @@ const INITIAL_STATE: GameState = {
   chain: { tiles: [], openEnd: 0 },
   anchorTile: null,
   discardCount: 0,
-  maxDiscards: 3,  // Increased to 3
+  maxDiscards: 2,
   handsPlayed: 0,
   maxHands: 3,
   roundScore: 0,
   ante: 1,
   blindIndex: 0,
   targetScore: 100,
-  currency: 2,  // Changed from 5 to 2
+  currency: 2,
   items: [],
   shopItems: [],
   shopPurchases: 0,
+  debugMode: false,
+  zeroWasteBonus: 0,
+  ghostPipeActive: false,
 }
 
-export const useGameStore = create<GameState & GameActions>((set, get) => ({
+export const useGameStore = create<GameState & { debugMode: boolean } & GameActions>((set, get) => ({
   ...INITIAL_STATE,
 
   startRun() {
@@ -52,7 +58,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       chain: { tiles: [], openEnd: 0 },
       anchorTile: null, // No anchor at start of run
       discardCount: 0,
-      maxDiscards: 3,  // Increased to 3
+      maxDiscards: 2,  // Increased to 3
       handsPlayed: 0,
       maxHands: 3,
       roundScore: 0,
@@ -83,12 +89,12 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       }
     }
     
-    const maxDiscards = bossModifier?.type === 'no_discards' ? 0 : 3  // Increased to 3
+    const maxDiscards = bossModifier?.type === 'no_discards' ? 0 : 2
     const { hand, pool: poolAfterDeal } = dealHand(state.pool, handSize)
 
     set({
       pool: poolAfterDeal,
-      discardPool: [],  // Reset discard pool at start of round
+      discardPool: [],
       hand,
       chain: { tiles: [], openEnd: 0 },
       discardCount: 0,
@@ -97,7 +103,9 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       maxHands: baseMaxHands,
       roundScore: 0,
       phase: 'round',
-      anchorTile: null,  // No anchor at start of round
+      anchorTile: null,
+      zeroWasteBonus: 0,
+      ghostPipeActive: false,
     })
   },
 
@@ -105,10 +113,20 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     const state = get()
     if (state.phase !== 'round') return
     const { chain, hand, anchorTile } = state
-    // Removed board size limit - can play any number of tiles
-    const newChain = chain.tiles.length === 0 ? initChain(tile, anchorTile || undefined) : placeOnChain(chain, tile)
+    // When ghost pipe is active and this is the first tile, force no broken link
+    const isFirstTile = chain.tiles.length === 0
+    let newChain = isFirstTile ? initChain(tile, anchorTile || undefined) : placeOnChain(chain, tile)
+    // Ghost Pipe: suppress broken link on first tile
+    if (isFirstTile && state.ghostPipeActive && newChain.tiles.length > 0 && newChain.tiles[0].brokenLink) {
+      newChain = {
+        ...newChain,
+        tiles: [{ ...newChain.tiles[0], brokenLink: false }, ...newChain.tiles.slice(1)]
+      }
+    }
     const newHand = hand.filter(t => t.id !== tile.id)
-    set({ chain: newChain, hand: newHand })
+    // Ghost Pipe consumed after first tile
+    const ghostPipeActive = isFirstTile ? false : state.ghostPipeActive
+    set({ chain: newChain, hand: newHand, ghostPipeActive })
   },
 
   discardSelected(tiles: Tile[]) {
@@ -181,14 +199,19 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
 
     // Use Domino Soul evaluation (anchor system)
     const result = evaluateRoundWithAnchor(
-      state.chain, 
+      state.chain,
       state.hand,
       state.anchorTile,
-      state.targetScore, 
+      state.targetScore,
       state.bossModifier,
       state.items,
       state.handsPlayed,
-      state.maxHands
+      state.maxHands,
+      state.currency,
+      state.discardCount,
+      state.maxDiscards,
+      state.zeroWasteBonus,
+      state.ghostPipeActive
     )
     
     const newRoundScore = state.roundScore + result.finalScore
@@ -213,57 +236,48 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       
       // Calculate gold earned based on hands remaining at end of round
       const finalHandsRemaining = Math.max(0, handsRemaining)
-      const goldEarned = 1 + finalHandsRemaining
-      
+      const goldPerRoundBonus = state.items.filter(i => i.effect.type === 'gold_per_round').length
+      const goldEarned = 1 + finalHandsRemaining + goldPerRoundBonus
+
       set({
         lastScore: { ...result, finalScore: newRoundScore, cleared },
         roundScore: newRoundScore,
         handsPlayed: newHandsPlayed,
-        anchorTile: null, // Reset anchor when round ends
-        currency: state.currency + goldEarned, // Add gold earned once at end of round
+        anchorTile: null,
+        currency: state.currency + goldEarned,
         phase: cleared ? 'shop' : 'game_over',
         shopItems,
-        shopPurchases: 0, // Reset purchase counter for new shop visit
+        shopPurchases: 0,
+        zeroWasteBonus: 0,
+        ghostPipeActive: false,
       })
       return
     }
 
-    // POST-PLAY REPLENISH: Draw back up to 6 tiles
+    // POST-PLAY REPLENISH: Reset pool and deal fresh hand of 6
     const replenishTarget = 6
-    const currentHandSize = state.hand.length
-    
-    // Calculate how many tiles to draw to reach 6
-    let tilesToDraw = 0
-    if (currentHandSize < replenishTarget) {
-      tilesToDraw = replenishTarget - currentHandSize
-    }
-    
-    // Draw from main pool
-    let newPool = state.pool
-    let newDiscardPool = state.discardPool
-    const { hand: drawnTiles, pool: poolAfterDraw } = dealHand(newPool, tilesToDraw)
+    let newPool = initPool()
+    let newDiscardPool: typeof state.discardPool = []
+    const { hand: drawnTiles, pool: poolAfterDraw } = dealHand(newPool, replenishTarget)
     newPool = poolAfterDraw
-    
-    // If pool is empty after drawing, shuffle discard pool into pool
-    if (newPool.length === 0 && newDiscardPool.length > 0) {
-      newPool = [...newDiscardPool]
-      newDiscardPool = []
-    }
-    
-    // Keep unplayed tiles and add drawn tiles
-    const finalHand = [...state.hand, ...drawnTiles]
+
+    // Fresh hand from reset pool
+    const finalHand = drawnTiles
 
     set({
       lastScore: result,
       roundScore: newRoundScore,
       handsPlayed: newHandsPlayed,
-      anchorTile: newAnchorTile, // Set anchor for next hand
+      anchorTile: newAnchorTile,
       chain: { tiles: [], openEnd: 0 },
       hand: finalHand,
       pool: newPool,
       discardPool: newDiscardPool,
       discardCount: 0,
-      // Don't add gold here - only add when round ends
+      currency: state.currency + (result.zeroWasteTriggered ? 3 : 0) + result.bonusGoldMidHand,
+      zeroWasteBonus: result.zeroWasteTriggered ? 10 : 0,
+      // ghost_pipe reactivates each hand if anchor exists
+      ghostPipeActive: newAnchorTile !== null && state.items.some(i => i.effect.type === 'ghost_pipe'),
     })
   },
 
@@ -307,5 +321,38 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
   sellItem(item: ShopItem) {
     const state = get()
     set(sellItemFn(state, item))
+  },
+
+  startDebugRun() {
+    const pool = initPool()
+    const { hand, pool: poolAfterDeal } = dealHand(pool, 6)
+    set({
+      ...INITIAL_STATE,
+      debugMode: true,
+      phase: 'round',
+      pool: poolAfterDeal,
+      hand,
+      targetScore: 0, // no target in debug
+      currency: 999,
+    })
+  },
+
+  setDebugItems(items: ShopItem[]) {
+    const state = get()
+    let maxHands = 3
+    let maxDiscards = state.bossModifier?.type === 'no_discards' ? 0 : 2
+    for (const item of items) {
+      if (item.effect.type === 'bigger_sack') maxHands += item.effect.amount
+      if (item.effect.type === 'extra_discard') maxDiscards += item.effect.amount
+    }
+    set({ items, maxHands, maxDiscards })
+  },
+
+  setDebugBoss(boss) {
+    const state = get()
+    const baseDiscards = state.items.reduce((sum, item) =>
+      item.effect.type === 'extra_discard' ? sum + item.effect.amount : sum, 2)
+    const maxDiscards = boss?.type === 'no_discards' ? 0 : baseDiscards
+    set({ bossModifier: boss ?? undefined, maxDiscards })
   },
 }))

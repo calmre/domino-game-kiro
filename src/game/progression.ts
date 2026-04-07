@@ -3,13 +3,13 @@ import type { BossModifier, BlindConfig, GameState } from './types'
 export const MAX_ANTES = 8
 
 const BOSS_MODIFIERS: BossModifier[] = [
-  { type: 'sandpaper', name: 'The Sandpaper', description: 'Run Bonus is disabled this round.' },
   { type: 'lead_weight', name: 'The Lead Weight', description: 'Each hand loses 5 from its base score.' },
   { type: 'frozen_bone', name: 'The Frozen Bone', description: 'Double tiles contribute 0 pips and 0 bonus.' },
 ]
 
 export function getBossModifier(ante: number): BossModifier {
-  return BOSS_MODIFIERS[(ante - 1) % BOSS_MODIFIERS.length]
+  const shuffled = [...BOSS_MODIFIERS].sort(() => Math.random() - 0.5)
+  return shuffled[ante % shuffled.length]
 }
 
 /**

@@ -1,4 +1,4 @@
-import type { Chain, MultiplierBreakdown, BossModifier, ShopItem } from './types'
+import type { Chain, MultiplierBreakdown, BossModifier, ShopItem, Tile } from './types'
 import { findLongestChain } from './chainFinder'
 
 /**
@@ -7,7 +7,7 @@ import { findLongestChain } from './chainFinder'
  * Tiles with broken links do NOT contribute to base score.
  * frozen_bone: doubles contribute 0 pips.
  */
-export function calculateBaseScore(chain: Chain, bossModifier?: BossModifier, items: ShopItem[] = [], anchorTile?: Tile | null): number {
+export function calculateBaseScore(chain: Chain, bossModifier?: BossModifier, items: ShopItem[] = [], anchorTile?: Tile | null, currency: number = 0, handSize: number = -1): number {
   // Start with anchor tile if present
   let base = 0
   
@@ -28,13 +28,6 @@ export function calculateBaseScore(chain: Chain, bossModifier?: BossModifier, it
     } else {
       anchorLeft = anchorLeft === 0 ? 7 : anchorLeft
       anchorRight = anchorRight === 0 ? 7 : anchorRight
-    }
-    
-    // Check for Heavy Lead upgrade
-    const hasHeavyLead = items.some(item => item.effect.type === 'heavy_lead')
-    if (hasHeavyLead) {
-      if (anchorTile.left === 6) anchorLeft += 5
-      if (anchorTile.right === 6) anchorRight += 5
     }
     
     base += anchorLeft + anchorRight
@@ -64,85 +57,51 @@ export function calculateBaseScore(chain: Chain, bossModifier?: BossModifier, it
       rightPip = rightPip === 0 ? 7 : rightPip
     }
     
-    // Check for Heavy Lead upgrade
-    const hasHeavyLead = items.some(item => item.effect.type === 'heavy_lead')
-    if (hasHeavyLead) {
-      if (pt.tile.left === 6) leftPip += 5
-      if (pt.tile.right === 6) rightPip += 5
-    }
-    
     return sum + leftPip + rightPip
   }, 0)
   
-  // Apply boss modifier penalties
-  // (none currently)
+  // Apply pip_bonus upgrades: +5 per tile side matching the pip
+  for (const item of items) {
+    if (item.effect.type === 'pip_bonus') {
+      const pip = item.effect.pip
+      for (const pt of chain.tiles) {
+        if (pt.brokenLink) continue
+        if (bossModifier?.type === 'frozen_bone' && pt.tile.left === pt.tile.right) continue
+        if (pt.tile.left === pip) base += 5
+        if (pt.tile.right === pip) base += 5
+      }
+    }
+  }
+
+  // seventh_son: +30 per 3 zero-pips (stacks), but if 6+ zeroes: +100 flat instead
+  if (items.some(i => i.effect.type === 'seventh_son')) {
+    let zeroPipCount = 0
+    for (const pt of chain.tiles) {
+      if (pt.brokenLink) continue
+      if (pt.tile.left === 0) zeroPipCount++
+      if (pt.tile.right === 0) zeroPipCount++
+    }
+    if (zeroPipCount >= 6) {
+      base += 100
+    } else {
+      base += Math.floor(zeroPipCount / 3) * 30
+    }
+  }
+
+  // lean_machine: +70 if hand has 3 or fewer tiles remaining
+  if (items.some(i => i.effect.type === 'lean_machine') && handSize >= 0 && handSize <= 3) {
+    base += 70
+  }
   
   // Apply score_bonus upgrades
   let scoreBonusAdd = 0
   for (const item of items) {
     const effect = item.effect
-    if (effect.type === 'score_bonus') {
-      scoreBonusAdd += effect.flat
-    }
+    if (effect.type === 'score_bonus') scoreBonusAdd += effect.flat
+    if (effect.type === 'gold_to_score') scoreBonusAdd += currency
   }
-  
-  // Remove Lead Weight upgrade logic (already handled by including anchor in base)
   
   return base + scoreBonusAdd
-}
-
-/**
- * Check if all played tiles form a sequential +1 order (Run bonus)
- * This checks if the pips form a consecutive sequence in order on the board
- * Note: 0 counts as both 0 AND 7 for run detection
- * Runs can be ascending (0,1,2,3) or descending (6,5,4,3)
- */
-function checkSequentialRun(chain: Chain, anchorTile?: Tile | null): boolean {
-  if (chain.tiles.length < 2 && !anchorTile) return false
-  
-  // Extract pips in the order they appear in the chain
-  const pipsInOrder: number[] = []
-  
-  // Add anchor pips first if present
-  if (anchorTile) {
-    pipsInOrder.push(anchorTile.left)
-    pipsInOrder.push(anchorTile.right)
-  }
-  
-  for (const pt of chain.tiles) {
-    // Get the displayed left and right values
-    const displayLeft = pt.flipped ? pt.tile.right : pt.tile.left
-    const displayRight = pt.flipped ? pt.tile.left : pt.tile.right
-    
-    // Add both pips from each tile
-    pipsInOrder.push(displayLeft)
-    pipsInOrder.push(displayRight)
-  }
-  
-  // Need at least 2 pips to form a run
-  if (pipsInOrder.length < 2) return false
-  
-  // Check if pips form a sequential run (each pip differs by 1 from the previous)
-  // Allow for 0 counting as both 0 and 7
-  // Also allow same pip (difference of 0) for doubles
-  let isSequential = true
-  for (let i = 1; i < pipsInOrder.length; i++) {
-    const prev = pipsInOrder[i - 1]
-    const curr = pipsInOrder[i]
-    const diff = curr - prev
-    
-    // Check if difference is +1, -1, 0 (same), or wrapping (0→7 or 7→0)
-    const isValidDiff = diff === 0 || diff === 1 || diff === -1 || 
-                        (prev === 0 && curr === 7) || 
-                        (prev === 7 && curr === 0)
-    
-    if (!isValidDiff) {
-      isSequential = false
-      break
-    }
-  }
-  
-  return isSequential
 }
 
 /**
@@ -159,8 +118,9 @@ export function calculateMultiplier(
   bossModifier?: BossModifier,
   handEmpty: boolean = false,
   items: ShopItem[] = [],
-  handSize: number = 0,
-  anchorTile?: Tile | null
+  _handSize: number = 0,
+  anchorTile?: Tile | null,
+  currency: number = 0
 ): MultiplierBreakdown {
   const tiles = chain.tiles
   
@@ -176,9 +136,9 @@ export function calculateMultiplier(
       chainLength: 1,
       chainBonus: 1.0,
       doubleMultiplier,
-      runMultiplier: 1.0,
       brokenLinks: 0,
       dominoBonus: false,
+      perfectLoopBonus: false,
       total: 1.0 * doubleMultiplier
     }
   }
@@ -188,16 +148,16 @@ export function calculateMultiplier(
       chainLength: 0, 
       chainBonus: 0, 
       doubleMultiplier: 1.0, 
-      runMultiplier: 1.0, 
       brokenLinks: 0, 
       dominoBonus: false, 
+      perfectLoopBonus: false,
       total: 1.0 
     }
   }
 
   // 1. CHAIN: Find longest continuous sequence of matching ends
   // Include anchor in chain calculation
-  const { maxChainLength, chainMult, chainCount } = findLongestChain(tiles)
+  const { maxChainLength, chainMult } = findLongestChain(tiles)
   
   // If anchor exists, it provides a base ×1 multiplier, and each tile adds +1
   // So: anchor alone = ×1, anchor + 1 tile = ×2, anchor + 2 tiles = ×3, etc.
@@ -210,19 +170,10 @@ export function calculateMultiplier(
     finalChainMult = Math.min(finalChainLength, 6)  // Cap at ×6
   }
   
-  // Count broken links (for display only - doesn't affect run bonus anymore)
+  // Count broken links (for display only)
   const brokenLinks = tiles.filter(tile => tile.brokenLink).length
   
-  // 2. RUN: Check if total pips form sequential +1 order
-  // Include anchor in run detection
-  let runMultiplier = 1.0
-  if (bossModifier?.type !== 'sandpaper') {
-    if (checkSequentialRun(chain, anchorTile)) {
-      runMultiplier = 1.5  // ×1.5 for sequential run
-    }
-  }
-  
-  // 3. DOUBLES: Count double tiles and calculate multiplier
+  // 2. DOUBLES: Count double tiles and calculate multiplier
   // Include anchor if it's a double
   let doubleCount = 0
   if (anchorTile && anchorTile.left === anchorTile.right && bossModifier?.type !== 'frozen_bone') {
@@ -244,37 +195,25 @@ export function calculateMultiplier(
   let chainBonusAdd = 0
   let doubleBoostAdd = 0
   let multiplierBonusAdd = 0
-  let hasSequentialSpark = false
   let hasPerfectLoop = false
-  let hasSlimFit = false
   let hasLongLink = false
   let longLinkAmount = 0
+  let hasGoldToMultiplier = false
+  let hasBinaryCode = false
+  let hasDoubleOrNothing = false
   
   for (const item of items) {
     const effect = item.effect
     switch (effect.type) {
-      case 'chain_bonus':
-        chainBonusAdd += effect.amount
-        break
-      case 'double_boost':
-        doubleBoostAdd += effect.amount
-        break
-      case 'multiplier_bonus':
-        multiplierBonusAdd += effect.amount
-        break
-      case 'sequential_spark':
-        hasSequentialSpark = true
-        break
-      case 'perfect_loop':
-        hasPerfectLoop = true
-        break
-      case 'slim_fit':
-        hasSlimFit = true
-        break
-      case 'long_link':
-        hasLongLink = true
-        longLinkAmount = effect.amount
-        break
+      case 'chain_bonus': chainBonusAdd += effect.amount; break
+      case 'double_boost': doubleBoostAdd += effect.amount; break
+      case 'multiplier_bonus': multiplierBonusAdd += effect.amount; break
+      case 'perfect_loop': hasPerfectLoop = true; break
+      case 'long_link': hasLongLink = true; longLinkAmount = effect.amount; break
+      case 'gold_to_multiplier': hasGoldToMultiplier = true; break
+      case 'lean_machine': break  // handled in calculateBaseScore
+      case 'binary_code': hasBinaryCode = true; break
+      case 'double_or_nothing': hasDoubleOrNothing = true; break
     }
   }
   
@@ -287,57 +226,63 @@ export function calculateMultiplier(
     adjustedChainMult = finalChainMult + chainBonusAdd
   }
   
-  // Apply double boost upgrade (increase base double multiplier)
-  const baseDoubleMultiplier = 1.25 + doubleBoostAdd
+  // Apply double boost upgrade — or Double or Nothing (×2.0 per double)
+  const baseDoubleMultiplier = hasDoubleOrNothing ? 2.0 : (1.25 + doubleBoostAdd)
   doubleMultiplier = Math.pow(baseDoubleMultiplier, doubleCount)
   
-  // Apply Sequential Spark upgrade (Run multiplier is ×2.0 instead of ×1.5)
-  if (hasSequentialSpark && runMultiplier > 1.0) {
-    runMultiplier = 2.0
-  }
-  
-  // Apply Perfect Loop upgrade (If first tile matches last tile, gain ×1.5 multiplier)
+  // Apply Perfect Loop upgrade: chain's open end matches the first tile's entry pip
   let perfectLoopMultiplier = 1.0
   if (hasPerfectLoop && tiles.length >= 2) {
-    const firstTile = tiles[0].tile
-    const lastTile = tiles[tiles.length - 1].tile
-    // Check if first tile matches last tile (considering orientation)
-    if ((firstTile.left === lastTile.left && firstTile.right === lastTile.right) ||
-        (firstTile.left === lastTile.right && firstTile.right === lastTile.left)) {
-      perfectLoopMultiplier = 1.5
+    const firstTile = tiles[0]
+    const firstEntryPip = firstTile.flipped ? firstTile.tile.right : firstTile.tile.left
+    if (chain.openEnd === firstEntryPip) {
+      perfectLoopMultiplier = 2.0
     }
   }
   
-  // Apply Slim Fit upgrade (+1.2x multiplier per empty hand slot below 5)
-  let slimFitMultiplier = 1.0
-  if (hasSlimFit && handSize > 0) {
-    const emptySlots = Math.max(0, 5 - handSize) // 5 is the base hand size
-    slimFitMultiplier = Math.pow(1.2, emptySlots)
-  }
   
-  // 6. CALCULATE TOTAL MULTIPLIER according to order:
-  // (ChainBonus) * (RunMult) * (DoubleMults) * (DominoMult) * (PerfectLoop) * (SlimFit)
-  let total = adjustedChainMult  // Start with chain bonus as direct multiplier
-  total *= runMultiplier
+  // 6. CALCULATE TOTAL MULTIPLIER:
+  let total = adjustedChainMult
   total *= doubleMultiplier
   total *= dominoMultiplier
   total *= perfectLoopMultiplier
-  total *= slimFitMultiplier
-  
+
+  // gold_to_multiplier: per 5 gold, +1.25x
+  if (hasGoldToMultiplier && currency > 0) {
+    const goldMult = 1 + Math.floor(currency / 5) * 0.25
+    total *= goldMult
+  }
+
+  // lean_machine: +70 base pips if hand size <= 3 (applied as score bonus in base, but
+  // we handle it here as a flat base addition reflected in total via a ratio isn't clean —
+  // lean_machine is handled in calculateBaseScore via extraBase param passed from round.ts)
+
+  // binary_code: ×1.5 if all played tiles are only 0s and 1s
+  if (hasBinaryCode && tiles.length > 0) {
+    const allBinary = tiles.every(pt => !pt.brokenLink &&
+      (pt.tile.left === 0 || pt.tile.left === 1) &&
+      (pt.tile.right === 0 || pt.tile.right === 1))
+    if (allBinary) total *= 1.5
+  }
+
+  // double_or_nothing: halve score if no Domino! bonus
+  if (hasDoubleOrNothing && !dominoBonus) {
+    total *= 0.5
+  }
+
   // Apply multiplier bonus upgrade
   total += multiplierBonusAdd
-  
-  // Ensure minimum multiplier of 1.0
+
   total = Math.max(1.0, total)
-  
-  return { 
-    chainLength: finalChainLength, 
-    chainBonus: adjustedChainMult, 
-    doubleMultiplier, 
-    runMultiplier, 
-    brokenLinks, 
+
+  return {
+    chainLength: finalChainLength,
+    chainBonus: adjustedChainMult,
+    doubleMultiplier,
+    brokenLinks,
     dominoBonus,
-    total 
+    perfectLoopBonus: perfectLoopMultiplier > 1.0,
+    total
   }
 }
 
@@ -345,14 +290,15 @@ export function calculateMultiplier(
  * Calculate final score with Domino Soul rules
  */
 export function calculateFinalScore(
-  chain: Chain, 
+  chain: Chain,
   bossModifier?: BossModifier,
   handEmpty: boolean = false,
   items: ShopItem[] = [],
   anchorTile?: Tile | null,
-  handSize: number = 0
+  handSize: number = 0,
+  currency: number = 0
 ): number {
-  const baseScore = calculateBaseScore(chain, bossModifier, items, anchorTile)
-  const multiplier = calculateMultiplier(chain, bossModifier, handEmpty, items, handSize, anchorTile)
+  const baseScore = calculateBaseScore(chain, bossModifier, items, anchorTile, currency, handSize)
+  const multiplier = calculateMultiplier(chain, bossModifier, handEmpty, items, handSize, anchorTile, currency)
   return Math.floor(baseScore * multiplier.total)
 }

@@ -9,6 +9,7 @@ export default function App() {
   const bossModifier = useGameStore(s => s.bossModifier)
   const startRun = useGameStore(s => s.startRun)
   const startRound = useGameStore(s => s.startRound)
+  const startDebugRun = useGameStore(s => s.startDebugRun)
 
   return (
     <div style={{
@@ -49,6 +50,21 @@ export default function App() {
             }}
           >
             Start Run
+          </button>
+          <button
+            onClick={startDebugRun}
+            style={{
+              padding: '8px 24px',
+              fontFamily: 'monospace',
+              fontSize: 13,
+              border: '1px solid #f9e2af66',
+              borderRadius: 8,
+              background: '#1a1a10',
+              color: '#f9e2af99',
+              cursor: 'pointer',
+            }}
+          >
+            🛠 Debug Mode
           </button>
         </div>
       )}

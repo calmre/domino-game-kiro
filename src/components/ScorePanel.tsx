@@ -10,13 +10,14 @@ interface ScorePanelProps {
   bossModifier?: BossModifier
   items?: ShopItem[]
   anchorTile?: Tile | null
+  currency?: number
 }
 
-export function ScorePanel({ lastScore, chain, hand, roundScore, targetScore, bossModifier, items = [], anchorTile = null }: ScorePanelProps) {
-  const base = calculateBaseScore(chain, bossModifier, items, anchorTile)
+export function ScorePanel({ lastScore, chain, hand, roundScore, targetScore, bossModifier, items = [], anchorTile = null, currency = 0 }: ScorePanelProps) {
+  const base = calculateBaseScore(chain, bossModifier, items, anchorTile, currency, hand.length)
   const handEmpty = hand.length === 0
-  const mult = calculateMultiplier(chain, bossModifier, handEmpty, items, hand.length, anchorTile)
-  const final = calculateFinalScore(chain, bossModifier, handEmpty, items, anchorTile, hand.length)
+  const mult = calculateMultiplier(chain, bossModifier, handEmpty, items, hand.length, anchorTile, currency)
+  const final = calculateFinalScore(chain, bossModifier, handEmpty, items, anchorTile, hand.length, currency)
 
   return (
     <div style={{ fontFamily: 'monospace', fontSize: 14, color: '#cdd6f4', display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -46,21 +47,15 @@ export function ScorePanel({ lastScore, chain, hand, roundScore, targetScore, bo
               </span>
             )}
           </div>
-          <div>
-            Run Multiplier: 
-            <span style={{ color: '#cba6f7' }}>
-              ×{mult.runMultiplier.toFixed(2)}
-            </span>
-            {mult.runMultiplier === 1.5 && (
-              <span style={{ fontSize: 11, color: '#a6e3a1', marginLeft: 4 }}>
-                (sequential +1)
-              </span>
-            )}
-          </div>
           <div>Double Multiplier: <span style={{ color: '#cba6f7' }}>×{mult.doubleMultiplier.toFixed(2)}</span></div>
           {mult.dominoBonus && (
             <div style={{ color: '#a6e3a1', fontWeight: 'bold' }}>
               🎯 Domino! Bonus: <span style={{ color: '#a6e3a1' }}>×1.75</span>
+            </div>
+          )}
+          {mult.perfectLoopBonus && (
+            <div style={{ color: '#f9e2af', fontWeight: 'bold' }}>
+              🔁 Perfect Loop: <span style={{ color: '#f9e2af' }}>×2.0</span>
             </div>
           )}
           <div style={{ borderTop: '1px solid #45475a', paddingTop: 2 }}>

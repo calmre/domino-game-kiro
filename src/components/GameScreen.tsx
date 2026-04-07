@@ -8,6 +8,7 @@ import { ActionBar } from './ActionBar'
 import { StatusBar } from './StatusBar'
 import { BossPenaltyBadge } from './BossBlindBanner'
 import { RulesPanel } from './RulesPanel'
+import { DebugPanel } from './DebugPanel'
 
 export function GameScreen() {
   const [discardMode, setDiscardMode] = useState(false)
@@ -36,6 +37,7 @@ export function GameScreen() {
   const undoLastTile = useGameStore(s => s.undoLastTile)
   const playHand = useGameStore(s => s.playHand)
   const sellItem = useGameStore(s => s.sellItem)
+  const debugMode = useGameStore(s => s.debugMode)
 
   const handlePlace = (tile: Tile) => {
     placeTile(tile)
@@ -250,6 +252,7 @@ export function GameScreen() {
             onToggleDiscard={handleToggleDiscard}
             selectedDiscardCount={selectedForDiscard.size}
             onConfirmDiscard={handleConfirmDiscard}
+            debugMode={debugMode}
           />
         </div>
 
@@ -264,11 +267,12 @@ export function GameScreen() {
           flexDirection: 'column',
           gap: 10,
         }}>
-          <ScorePanel lastScore={lastScore} chain={chain} hand={hand} roundScore={roundScore} targetScore={targetScore} bossModifier={bossModifier} items={items} anchorTile={anchorTile} />
+          <ScorePanel lastScore={lastScore} chain={chain} hand={hand} roundScore={roundScore} targetScore={targetScore} bossModifier={bossModifier} items={items} anchorTile={anchorTile} currency={currency} />
           {bossModifier && <BossPenaltyBadge bossModifier={bossModifier} />}
         </div>
 
         <RulesPanel />
+        {debugMode && <DebugPanel />}
       </div>
     </div>
   )

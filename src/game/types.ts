@@ -31,13 +31,13 @@ export type Hand = Tile[]
 
 /** Breakdown of how the multiplier was computed. */
 export interface MultiplierBreakdown {
-  chainLength: number   // based on longest unbroken segment
-  chainBonus: number    // additive bonus: +2 for 3 tiles, +3 for 4, +4 for 5
-  doubleMultiplier: number // multiplicative: x1.25 per double
-  runMultiplier: number    // multiplicative: x1.5 for 3-tile run, x1.75 for 5-tile run
-  brokenLinks: number   // count of broken link connections
-  dominoBonus: boolean  // x1.75 multiplier if hand is empty (Domino! bonus)
-  total: number         // final multiplier after all calculations
+  chainLength: number
+  chainBonus: number
+  doubleMultiplier: number
+  brokenLinks: number
+  dominoBonus: boolean
+  perfectLoopBonus: boolean
+  total: number
 }
 
 /** Configuration for a single blind. */
@@ -51,7 +51,6 @@ export interface BlindConfig {
 
 /** A gameplay modifier applied during a boss match. */
 export type BossModifier =
-  | { type: 'sandpaper'; name: 'The Sandpaper'; description: 'Run Bonus is disabled this round.' }
   | { type: 'lead_weight'; name: 'The Lead Weight'; description: 'Each hand loses 5 from its base score.' }
   | { type: 'frozen_bone'; name: 'The Frozen Bone'; description: 'Double tiles contribute 0 pips and 0 bonus.' }
   | { type: 'reduced_hand'; name: 'The Small Hand'; description: 'Hand size reduced to 4 tiles.'; size: number }
@@ -75,12 +74,21 @@ export type ItemEffect =
   | { type: 'chain_bonus'; amount: number }
   | { type: 'double_boost'; amount: number }
   | { type: 'zero_gravity' }
-  | { type: 'heavy_lead' }
   | { type: 'long_link'; amount: number }
-  | { type: 'sequential_spark' }
   | { type: 'perfect_loop' }
   | { type: 'bigger_sack'; amount: number }
-  | { type: 'slim_fit' }
+  | { type: 'pip_bonus'; pip: number }
+  | { type: 'gold_per_round' }
+  | { type: 'gold_per_pip1_tile' }
+  | { type: 'gold_to_score' }
+  | { type: 'gold_to_multiplier' }
+  | { type: 'lean_machine' }
+  | { type: 'zero_waste' }
+  | { type: 'ghost_pipe' }
+  | { type: 'seventh_son' }
+  | { type: 'lucky_7' }
+  | { type: 'binary_code' }
+  | { type: 'double_or_nothing' }
 
 /** The complete game state. */
 export interface GameState {
@@ -104,6 +112,8 @@ export interface GameState {
   shopPurchases: number     // Number of purchases made in current shop visit (max 3)
   lastScore?: ScoringResult
   bossModifier?: BossModifier
+  zeroWasteBonus: number      // flat base bonus carried from Zero Waste last hand
+  ghostPipeActive: boolean    // Ghost Pipe: anchor acts as wild for first tile this hand
 }
 
 /** The result of scoring a completed round. */
@@ -113,4 +123,6 @@ export interface ScoringResult {
   finalScore: number
   cleared: boolean
   goldEarned: number
+  zeroWasteTriggered?: boolean
+  bonusGoldMidHand: number  // lucky_7, gold_per_pip1 etc — applied between hands
 }

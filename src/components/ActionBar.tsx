@@ -11,6 +11,7 @@ interface ActionBarProps {
   onToggleDiscard: () => void
   selectedDiscardCount: number
   onConfirmDiscard: () => void
+  debugMode?: boolean
 }
 
 export function ActionBar({
@@ -24,10 +25,11 @@ export function ActionBar({
   onToggleDiscard,
   selectedDiscardCount,
   onConfirmDiscard,
+  debugMode = false,
 }: ActionBarProps) {
   const canPlay = chain.tiles.length >= 1
   const remainingDiscards = maxDiscards - discardCount
-  const canDiscard = remainingDiscards > 0
+  const canDiscard = debugMode || remainingDiscards > 0
   const handsRemaining = maxHands - handsPlayed
 
   return (
