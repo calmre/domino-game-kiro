@@ -15,8 +15,10 @@ const ALL_ITEMS = getAllShopItems()
 export function DebugPanel() {
   const items = useGameStore(s => s.items)
   const bossModifier = useGameStore(s => s.bossModifier)
+  const targetScore = useGameStore(s => s.targetScore)
   const setDebugItems = useGameStore(s => s.setDebugItems)
   const setDebugBoss = useGameStore(s => s.setDebugBoss)
+  const debugWin = useGameStore(s => s.debugWin)
 
   const toggleItem = (item: ShopItem) => {
     const has = items.some(i => i.id === item.id)
@@ -32,6 +34,8 @@ export function DebugPanel() {
     const boss = BOSS_OPTIONS.find(b => (b?.type ?? 'none') === val) ?? null
     setDebugBoss(boss)
   }
+
+  const isInfinite = targetScore >= 999999999
 
   return (
     <div style={{
@@ -51,6 +55,30 @@ export function DebugPanel() {
       overflowY: 'auto',
     }}>
       <div style={{ color: '#f9e2af', fontWeight: 'bold', fontSize: 12, marginBottom: 2 }}>🛠 Debug</div>
+
+      {/* Target display */}
+      <div style={{ fontSize: 10, color: '#a6adc8' }}>
+        Target: <span style={{ color: isInfinite ? '#a6e3a1' : '#f9e2af' }}>{isInfinite ? '∞' : targetScore}</span>
+      </div>
+
+      {/* Simulate Win button */}
+      <button
+        onClick={debugWin}
+        style={{
+          padding: '6px 8px',
+          background: '#1a3d1a',
+          border: '1px solid #a6e3a1',
+          borderRadius: 5,
+          color: '#a6e3a1',
+          fontFamily: 'monospace',
+          fontSize: 11,
+          fontWeight: 'bold',
+          cursor: 'pointer',
+          width: '100%',
+        }}
+      >
+        ✓ Simulate Win
+      </button>
 
       {/* Boss selector */}
       <div style={{ color: '#a6adc8', fontSize: 10, marginBottom: 2 }}>Boss Modifier</div>

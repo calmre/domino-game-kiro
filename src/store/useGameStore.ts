@@ -19,6 +19,7 @@ interface GameActions {
   startDebugRun(): void
   setDebugItems(items: ShopItem[]): void
   setDebugBoss(boss: import('../game/types').BossModifier | null): void
+  debugWin(): void
 }
 
 const INITIAL_STATE: GameState & { debugMode: boolean } = {
@@ -285,19 +286,17 @@ export const useGameStore = create<GameState & { debugMode: boolean } & GameActi
     const state = get()
     const next = nextBlind(state)
     const isBoss = next.blindIndex === 2
-
-    // Refresh pool at start of new ante (after boss match)
-    const isNewAnte = isBoss
-    const newPool = isNewAnte ? initPool() : state.pool
+    const newPool = isBoss ? initPool() : state.pool
 
     set({ 
       ...next, 
       pool: newPool,
-      discardPool: [],  // Reset discard pool
-      shopItems: [],    // Clear shop items
-      shopPurchases: 0, // Reset purchase counter
-      items: state.items,  // PRESERVE items across rounds
-      currency: state.currency,  // PRESERVE currency
+      discardPool: [],
+      shopItems: [],
+      shopPurchases: 0,
+      items: state.items,
+      currency: state.currency,
+      targetScore: state.debugMode ? 999999999 : next.targetScore,
       phase: isBoss ? 'boss_intro' : 'round' 
     })
     if (!isBoss) get().startRound()
@@ -332,7 +331,7 @@ export const useGameStore = create<GameState & { debugMode: boolean } & GameActi
       phase: 'round',
       pool: poolAfterDeal,
       hand,
-      targetScore: 0, // no target in debug
+      targetScore: 999999999, // effectively infinite
       currency: 999,
     })
   },
@@ -354,5 +353,19 @@ export const useGameStore = create<GameState & { debugMode: boolean } & GameActi
       item.effect.type === 'extra_discard' ? sum + item.effect.amount : sum, 2)
     const maxDiscards = boss?.type === 'no_discards' ? 0 : baseDiscards
     set({ bossModifier: boss ?? undefined, maxDiscards })
+  },
+
+  debugWin() {
+    const state = get()
+    if (state.phase !== 'round') return
+    const shopItems = generateRandomShopItems()
+    set({
+      phase: 'shop',
+      shopItems,
+      shopPurchases: 0,
+      anchorTile: null,
+      currency: state.currency + 4,
+      lastScore: { baseScore: 0, multiplier: { chainLength: 0, chainBonus: 0, doubleMultiplier: 1, brokenLinks: 0, dominoBonus: false, perfectLoopBonus: false, total: 1 }, finalScore: 999999, cleared: true, goldEarned: 4, bonusGoldMidHand: 0, zeroWasteTriggered: false },
+    })
   },
 }))
