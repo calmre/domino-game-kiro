@@ -37,6 +37,8 @@ export interface MultiplierBreakdown {
   brokenLinks: number
   dominoBonus: boolean
   perfectLoopBonus: boolean
+  binaryCodeBonus: boolean
+  compoundInterestBonus: number  // gold mult applied (0 if not triggered)
   total: number
 }
 
@@ -89,6 +91,14 @@ export type ItemEffect =
   | { type: 'lucky_7' }
   | { type: 'binary_code' }
   | { type: 'double_or_nothing' }
+  | { type: 'benchwarmer' }
+  | { type: 'last_tile_standing' }
+  | { type: 'held_power' }
+  | { type: 'delayed_investment' }
+  | { type: 'all_in' }
+  | { type: 'phenomenal_evil' }
+  | { type: 'extra_finger' }
+  | { type: 'weakest_link' }
 
 /** The complete game state. */
 export interface GameState {
@@ -112,8 +122,10 @@ export interface GameState {
   shopPurchases: number     // Number of purchases made in current shop visit (max 3)
   lastScore?: ScoringResult
   bossModifier?: BossModifier
-  zeroWasteBonus: number      // flat base bonus carried from Zero Waste last hand
-  ghostPipeActive: boolean    // Ghost Pipe: anchor acts as wild for first tile this hand
+  zeroWasteBonus: number
+  ghostPipeActive: boolean
+  ghostPipeUsed: boolean      // stays true after first tile placed via ghost pipe, until hand played
+  phenomenalEvilBonus: number
 }
 
 /** The result of scoring a completed round. */
@@ -124,5 +136,6 @@ export interface ScoringResult {
   cleared: boolean
   goldEarned: number
   zeroWasteTriggered?: boolean
-  bonusGoldMidHand: number  // lucky_7, gold_per_pip1 etc — applied between hands
+  bonusGoldMidHand: number
+  phenomenalEvilGain: number  // permanent base bonus gained this hand
 }

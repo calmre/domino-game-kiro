@@ -44,6 +44,8 @@ const INITIAL_STATE: GameState & { debugMode: boolean } = {
   debugMode: false,
   zeroWasteBonus: 0,
   ghostPipeActive: false,
+  ghostPipeUsed: false,
+  phenomenalEvilBonus: 0,
 }
 
 export const useGameStore = create<GameState & { debugMode: boolean } & GameActions>((set, get) => ({
@@ -79,8 +81,12 @@ export const useGameStore = create<GameState & { debugMode: boolean } & GameActi
     const state = get()
     const { bossModifier, items } = state
     
-    // Hand size is capped at 6
-    const handSize = bossModifier?.type === 'reduced_hand' ? bossModifier.size : 6
+    // Hand size: base 6, +1 per extra_finger, capped by reduced_hand boss
+    let handSize = 6
+    for (const item of items) {
+      if (item.effect.type === 'extra_finger') handSize += 1
+    }
+    if (bossModifier?.type === 'reduced_hand') handSize = Math.min(handSize, bossModifier.size)
     
     // Calculate max hands: base 3 + bigger_sack upgrades
     let baseMaxHands = 3
@@ -107,6 +113,7 @@ export const useGameStore = create<GameState & { debugMode: boolean } & GameActi
       anchorTile: null,
       zeroWasteBonus: 0,
       ghostPipeActive: false,
+      ghostPipeUsed: false,
     })
   },
 
@@ -114,20 +121,25 @@ export const useGameStore = create<GameState & { debugMode: boolean } & GameActi
     const state = get()
     if (state.phase !== 'round') return
     const { chain, hand, anchorTile } = state
-    // When ghost pipe is active and this is the first tile, force no broken link
     const isFirstTile = chain.tiles.length === 0
-    let newChain = isFirstTile ? initChain(tile, anchorTile || undefined) : placeOnChain(chain, tile)
-    // Ghost Pipe: suppress broken link on first tile
-    if (isFirstTile && state.ghostPipeActive && newChain.tiles.length > 0 && newChain.tiles[0].brokenLink) {
-      newChain = {
-        ...newChain,
-        tiles: [{ ...newChain.tiles[0], brokenLink: false }, ...newChain.tiles.slice(1)]
+    let newChain: typeof chain
+    if (isFirstTile) {
+      newChain = initChain(tile, anchorTile || undefined)
+      if (state.ghostPipeActive) {
+        // Force no broken link and set openEnd to -1 so second tile gets both-ends-open behavior
+        newChain = {
+          ...newChain,
+          tiles: [{ ...newChain.tiles[0], brokenLink: false }],
+          openEnd: -1,
+        }
       }
+    } else {
+      newChain = placeOnChain(chain, tile)
     }
     const newHand = hand.filter(t => t.id !== tile.id)
-    // Ghost Pipe consumed after first tile
     const ghostPipeActive = isFirstTile ? false : state.ghostPipeActive
-    set({ chain: newChain, hand: newHand, ghostPipeActive })
+    const ghostPipeUsed = isFirstTile && state.ghostPipeActive ? true : state.ghostPipeUsed
+    set({ chain: newChain, hand: newHand, ghostPipeActive, ghostPipeUsed })
   },
 
   discardSelected(tiles: Tile[]) {
@@ -212,7 +224,9 @@ export const useGameStore = create<GameState & { debugMode: boolean } & GameActi
       state.discardCount,
       state.maxDiscards,
       state.zeroWasteBonus,
-      state.ghostPipeActive
+      state.ghostPipeActive,
+      state.phenomenalEvilBonus,
+      state.ghostPipeUsed
     )
     
     const newRoundScore = state.roundScore + result.finalScore
@@ -251,6 +265,8 @@ export const useGameStore = create<GameState & { debugMode: boolean } & GameActi
         shopPurchases: 0,
         zeroWasteBonus: 0,
         ghostPipeActive: false,
+        ghostPipeUsed: false,
+        phenomenalEvilBonus: state.phenomenalEvilBonus + result.phenomenalEvilGain,
       })
       return
     }
@@ -277,8 +293,9 @@ export const useGameStore = create<GameState & { debugMode: boolean } & GameActi
       discardCount: 0,
       currency: state.currency + (result.zeroWasteTriggered ? 3 : 0) + result.bonusGoldMidHand,
       zeroWasteBonus: result.zeroWasteTriggered ? 10 : 0,
-      // ghost_pipe reactivates each hand if anchor exists
       ghostPipeActive: newAnchorTile !== null && state.items.some(i => i.effect.type === 'ghost_pipe'),
+      ghostPipeUsed: false,
+      phenomenalEvilBonus: state.phenomenalEvilBonus + result.phenomenalEvilGain,
     })
   },
 
@@ -365,7 +382,7 @@ export const useGameStore = create<GameState & { debugMode: boolean } & GameActi
       shopPurchases: 0,
       anchorTile: null,
       currency: state.currency + 4,
-      lastScore: { baseScore: 0, multiplier: { chainLength: 0, chainBonus: 0, doubleMultiplier: 1, brokenLinks: 0, dominoBonus: false, perfectLoopBonus: false, total: 1 }, finalScore: 999999, cleared: true, goldEarned: 4, bonusGoldMidHand: 0, zeroWasteTriggered: false },
+      lastScore: { baseScore: 0, multiplier: { chainLength: 0, chainBonus: 0, doubleMultiplier: 1, brokenLinks: 0, dominoBonus: false, perfectLoopBonus: false, binaryCodeBonus: false, compoundInterestBonus: 0, total: 1 }, finalScore: 999999, cleared: true, goldEarned: 4, bonusGoldMidHand: 0, phenomenalEvilGain: 0, zeroWasteTriggered: false },
     })
   },
 }))

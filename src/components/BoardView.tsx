@@ -8,6 +8,7 @@ interface BoardViewProps {
   onDragOver?: (e: React.DragEvent) => void
   onDrop?: (e: React.DragEvent) => void
   ghostTile?: Tile | null
+  ghostPipeActive?: boolean
 }
 
 // Helper to render pip dots on a domino half
@@ -322,8 +323,9 @@ function DominoTile({ left, right, isLast, isBroken, isAnchor, onClick, isGhost,
   )
 }
 
-export function BoardView({ chain, anchorTile, onUndoLast, onDragOver, onDrop, ghostTile }: BoardViewProps) {
-  const hasBrokenLinks = chain.tiles.some(tile => tile.brokenLink)
+export function BoardView({ chain, anchorTile, onUndoLast, onDragOver, onDrop, ghostTile, ghostPipeActive = false }: BoardViewProps) {
+  // Ghost Pipe: first tile's broken link is suppressed visually
+  const hasBrokenLinks = chain.tiles.some((tile, i) => tile.brokenLink && !(i === 0 && ghostPipeActive))
   const [isDragOver, setIsDragOver] = useState(false)
   
   const handleDragOver = (e: React.DragEvent) => {
@@ -405,6 +407,7 @@ export function BoardView({ chain, anchorTile, onUndoLast, onDragOver, onDrop, g
             const left = pt.flipped ? pt.tile.right : pt.tile.left
             const right = pt.flipped ? pt.tile.left : pt.tile.right
             const isLast = i === chain.tiles.length - 1
+            const showBroken = pt.brokenLink && !(i === 0 && ghostPipeActive)
 
             return (
               <div key={`${pt.tile.id}-${i}`} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -412,7 +415,7 @@ export function BoardView({ chain, anchorTile, onUndoLast, onDragOver, onDrop, g
                   left={left}
                   right={right}
                   isLast={isLast}
-                  isBroken={pt.brokenLink}
+                  isBroken={showBroken}
                   isAnchor={false}
                   onClick={isLast ? onUndoLast : undefined}
                   isDouble={left === right}

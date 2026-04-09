@@ -38,6 +38,9 @@ export function GameScreen() {
   const playHand = useGameStore(s => s.playHand)
   const sellItem = useGameStore(s => s.sellItem)
   const debugMode = useGameStore(s => s.debugMode)
+  const phenomenalEvilBonus = useGameStore(s => s.phenomenalEvilBonus)
+  const ghostPipeActive = useGameStore(s => s.ghostPipeActive)
+  const ghostPipeUsed = useGameStore(s => s.ghostPipeUsed)
 
   const handlePlace = (tile: Tile) => {
     placeTile(tile)
@@ -219,6 +222,7 @@ export function GameScreen() {
               onDragOver={handleDragOver}
               onDrop={handleDrop}
               ghostTile={ghostTile}
+              ghostPipeActive={ghostPipeUsed}
             />
           </div>
 
@@ -267,7 +271,7 @@ export function GameScreen() {
           flexDirection: 'column',
           gap: 10,
         }}>
-          <ScorePanel lastScore={lastScore} chain={chain} hand={hand} roundScore={roundScore} targetScore={targetScore} bossModifier={bossModifier} items={items} anchorTile={anchorTile} currency={currency} />
+          <ScorePanel lastScore={lastScore} chain={chain} hand={hand} roundScore={roundScore} targetScore={targetScore} bossModifier={bossModifier} items={items} anchorTile={anchorTile} currency={currency} phenomenalEvilBonus={phenomenalEvilBonus} />
           {bossModifier && <BossPenaltyBadge bossModifier={bossModifier} />}
         </div>
 

@@ -237,6 +237,62 @@ export function getAllShopItems(): ShopItem[] {
       cost: 11,
       effect: { type: 'double_or_nothing' },
     },
+    {
+      id: 'benchwarmer',
+      name: 'Benchwarmer',
+      description: 'Each unplayed tile gives ×1.25 to multiplier. Negated by Domino!',
+      cost: 4,
+      effect: { type: 'benchwarmer' },
+    },
+    {
+      id: 'last-tile-standing',
+      name: 'Last Tile Standing',
+      description: '+100 base if only 1 tile is played.',
+      cost: 3,
+      effect: { type: 'last_tile_standing' },
+    },
+    {
+      id: 'held-power',
+      name: 'Held Power',
+      description: '+10 base per unplayed tile.',
+      cost: 3,
+      effect: { type: 'held_power' },
+    },
+    {
+      id: 'delayed-investment',
+      name: 'Delayed Investment',
+      description: '+1 gold per unplayed tile when playing a hand.',
+      cost: 2,
+      effect: { type: 'delayed_investment' },
+    },
+    {
+      id: 'all-in',
+      name: 'All-In',
+      description: 'Domino! bonus is ×3.0 instead of ×1.75.',
+      cost: 10,
+      effect: { type: 'all_in' },
+    },
+    {
+      id: 'phenomenal-evil',
+      name: 'Phenomenal Evil',
+      description: '+1 permanent base per unplayed tile. Stacks throughout the game.',
+      cost: 3,
+      effect: { type: 'phenomenal_evil' },
+    },
+    {
+      id: 'extra-finger',
+      name: 'Extra Finger',
+      description: '+1 hand size.',
+      cost: 2,
+      effect: { type: 'extra_finger' },
+    },
+    {
+      id: 'weakest-link',
+      name: 'Weakest Link',
+      description: 'Your unplayed tile with the smallest pip value gives ×2 to base.',
+      cost: 3,
+      effect: { type: 'weakest_link' },
+    },
   ]
 }
 

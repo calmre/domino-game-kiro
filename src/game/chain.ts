@@ -10,18 +10,13 @@ export function initChain(tile: Tile, anchorTile?: Tile): Chain {
   let openEnd: number
 
   if (anchorTile) {
-    // First tile must connect to anchor's open end
-    // Anchor's open end is always on the right side visually
-    // Determine which end of the tile matches the anchor
-    const canConnectLeft = tile.left === anchorTile.left || tile.left === anchorTile.right
-    const canConnectRight = tile.right === anchorTile.left || tile.right === anchorTile.right
+    // First tile must connect to anchor's open end (right pip of anchor)
+    const anchorOpenEnd = anchorTile.right
 
-    if (canConnectLeft) {
-      // Left end connects to anchor, so don't flip (left connects, right is open)
+    if (tile.left === anchorOpenEnd) {
       placed = { tile, flipped: false, brokenLink: false }
       openEnd = tile.right
-    } else if (canConnectRight) {
-      // Right end connects to anchor, so flip (right connects, left is open)
+    } else if (tile.right === anchorOpenEnd) {
       placed = { tile, flipped: true, brokenLink: false }
       openEnd = tile.left
     } else {

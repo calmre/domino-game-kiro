@@ -25,7 +25,7 @@ export function evaluateRound(chain: Chain, targetScore: number, bossModifier?: 
   const multiplier = calculateMultiplier(chain, bossModifier, false, items, 0)
   const finalScore = calculateFinalScore(chain, bossModifier, false, items, null, 0)
   const cleared = finalScore >= targetScore
-  return { baseScore, multiplier, finalScore, cleared, goldEarned: 0, bonusGoldMidHand: 0 }
+  return { baseScore, multiplier, finalScore, cleared, goldEarned: 0, bonusGoldMidHand: 0, phenomenalEvilGain: 0 }
 }
 
 /**
@@ -45,36 +45,35 @@ export function evaluateRoundWithAnchor(
   discardCount: number = 0,
   maxDiscards: number = 2,
   zeroWasteBonus: number = 0,
-  ghostPipeActive: boolean = false
+  ghostPipeActive: boolean = false,
+  phenomenalEvilBonus: number = 0,
+  ghostPipeUsed: boolean = false
 ): ScoringResult {
   const chainCopy = {
     ...chain,
     tiles: chain.tiles.map(tile => ({...tile}))
   }
 
-  // ghost_pipe: if active, first tile never causes a broken link regardless of anchor
+  // ghost_pipe: chain was built ignoring anchor constraint, skip mismatch check
   let hasAnchorMismatch = false
-  if (anchorTile && chainCopy.tiles.length > 0) {
+  if (anchorTile && chainCopy.tiles.length > 0 && !ghostPipeActive && !ghostPipeUsed) {
     const firstTile = chainCopy.tiles[0].tile
     if (!checkAnchorMatch(anchorTile, firstTile)) {
-      if (ghostPipeActive && items.some(i => i.effect.type === 'ghost_pipe')) {
-        // Wild connection — no broken link
-      } else {
-        hasAnchorMismatch = true
-        chainCopy.tiles[0].brokenLink = true
-      }
+      hasAnchorMismatch = true
+      chainCopy.tiles[0].brokenLink = true
     }
   }
 
   const hasDominoBonus = hand.length === 0
 
-  const baseScore = calculateBaseScore(chainCopy, bossModifier, items, anchorTile, currency, hand.length)
-  const multiplier = calculateMultiplier(chainCopy, bossModifier, hasDominoBonus, items, hand.length, anchorTile, currency)
+  const baseScore = calculateBaseScore(chainCopy, bossModifier, items, anchorTile, currency, hand.length, hand, phenomenalEvilBonus)
+  const multiplier = calculateMultiplier(chainCopy, bossModifier, hasDominoBonus, items, hand.length, anchorTile, currency, hand)
   const finalScore = Math.floor(baseScore * multiplier.total) + zeroWasteBonus
   const cleared = finalScore >= targetScore
 
-  // gold_per_pip1_tile and lucky_7: mid-hand gold (applied between hands, not at round end)
+  // mid-hand gold bonuses
   let bonusGoldMidHand = 0
+
   if (items.some(i => i.effect.type === 'gold_per_pip1_tile')) {
     for (const pt of chainCopy.tiles) {
       if (pt.brokenLink) continue
@@ -89,8 +88,14 @@ export function evaluateRoundWithAnchor(
       if (l + r === 7) bonusGoldMidHand++
     }
   }
+  // delayed_investment: +1 gold per unplayed tile
+  if (items.some(i => i.effect.type === 'delayed_investment')) {
+    bonusGoldMidHand += hand.length
+  }
 
-  // zero_waste: triggers when all discards used up — +$3 gold, +10 base next hand (unless cleared)
+  // phenomenal_evil: +1 permanent base per unplayed tile this hand
+  const phenomenalEvilGain = items.some(i => i.effect.type === 'phenomenal_evil') ? hand.length : 0
+
   const zeroWasteTriggered = items.some(i => i.effect.type === 'zero_waste') && discardCount >= maxDiscards && !cleared
   const zeroWasteGold = zeroWasteTriggered ? 3 : 0
 
@@ -108,5 +113,6 @@ export function evaluateRoundWithAnchor(
     goldEarned,
     zeroWasteTriggered,
     bonusGoldMidHand,
+    phenomenalEvilGain,
   }
 }

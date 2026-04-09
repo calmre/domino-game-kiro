@@ -7,7 +7,7 @@ import { findLongestChain } from './chainFinder'
  * Tiles with broken links do NOT contribute to base score.
  * frozen_bone: doubles contribute 0 pips.
  */
-export function calculateBaseScore(chain: Chain, bossModifier?: BossModifier, items: ShopItem[] = [], anchorTile?: Tile | null, currency: number = 0, handSize: number = -1): number {
+export function calculateBaseScore(chain: Chain, bossModifier?: BossModifier, items: ShopItem[] = [], anchorTile?: Tile | null, currency: number = 0, handSize: number = -1, hand: Tile[] = [], phenomenalEvilBonus: number = 0): number {
   // Start with anchor tile if present
   let base = 0
   
@@ -88,9 +88,35 @@ export function calculateBaseScore(chain: Chain, bossModifier?: BossModifier, it
     }
   }
 
-  // lean_machine: +70 if hand has 3 or fewer tiles remaining
-  if (items.some(i => i.effect.type === 'lean_machine') && handSize >= 0 && handSize <= 3) {
-    base += 70
+  // lean_machine: +70 if board has 1-3 tiles (chain tiles + anchor), negated if more than 3
+  if (items.some(i => i.effect.type === 'lean_machine')) {
+    const boardCount = chain.tiles.length + (anchorTile ? 1 : 0)
+    if (boardCount >= 1 && boardCount <= 3) base += 70
+  }
+
+  // last_tile_standing: +100 base if exactly 1 tile was played
+  if (items.some(i => i.effect.type === 'last_tile_standing') && chain.tiles.length === 1) {
+    base += 100
+  }
+
+  // held_power: +10 base per unplayed tile
+  if (items.some(i => i.effect.type === 'held_power') && handSize > 0) {
+    base += handSize * 10
+  }
+
+  // phenomenal_evil: permanent bonus accumulated over the game
+  if (phenomenalEvilBonus > 0) {
+    base += phenomenalEvilBonus
+  }
+
+  // weakest_link: find unplayed tile with smallest pip value, double its pip contribution to base
+  if (items.some(i => i.effect.type === 'weakest_link') && hand.length > 0) {
+    let minPip = Infinity
+    for (const t of hand) {
+      const pip = Math.min(t.left === 0 ? 7 : t.left, t.right === 0 ? 7 : t.right)
+      if (pip < minPip) minPip = pip
+    }
+    if (minPip !== Infinity) base += minPip * 2
   }
   
   // Apply score_bonus upgrades
@@ -120,7 +146,8 @@ export function calculateMultiplier(
   items: ShopItem[] = [],
   _handSize: number = 0,
   anchorTile?: Tile | null,
-  currency: number = 0
+  currency: number = 0,
+  hand: Tile[] = []
 ): MultiplierBreakdown {
   const tiles = chain.tiles
   
@@ -139,6 +166,8 @@ export function calculateMultiplier(
       brokenLinks: 0,
       dominoBonus: false,
       perfectLoopBonus: false,
+      binaryCodeBonus: false,
+      compoundInterestBonus: 0,
       total: 1.0 * doubleMultiplier
     }
   }
@@ -151,6 +180,8 @@ export function calculateMultiplier(
       brokenLinks: 0, 
       dominoBonus: false, 
       perfectLoopBonus: false,
+      binaryCodeBonus: false,
+      compoundInterestBonus: 0,
       total: 1.0 
     }
   }
@@ -186,11 +217,6 @@ export function calculateMultiplier(
   }
   let doubleMultiplier = Math.pow(1.25, doubleCount)  // ×1.25 per double
   
-  // 4. DOMINO BONUS: If hand is empty AND no broken chain
-  // Domino multiplier shouldn't apply if there's ANY broken chain
-  const dominoBonus = handEmpty && brokenLinks === 0
-  const dominoMultiplier = dominoBonus ? 1.75 : 1.0  // ×1.75 for empty hand only if chain is unbroken
-  
   // 5. APPLY UPGRADE EFFECTS
   let chainBonusAdd = 0
   let doubleBoostAdd = 0
@@ -201,6 +227,8 @@ export function calculateMultiplier(
   let hasGoldToMultiplier = false
   let hasBinaryCode = false
   let hasDoubleOrNothing = false
+  let hasBenchwarmer = false
+  let hasAllIn = false
   
   for (const item of items) {
     const effect = item.effect
@@ -211,12 +239,18 @@ export function calculateMultiplier(
       case 'perfect_loop': hasPerfectLoop = true; break
       case 'long_link': hasLongLink = true; longLinkAmount = effect.amount; break
       case 'gold_to_multiplier': hasGoldToMultiplier = true; break
-      case 'lean_machine': break  // handled in calculateBaseScore
+      case 'lean_machine': break
       case 'binary_code': hasBinaryCode = true; break
       case 'double_or_nothing': hasDoubleOrNothing = true; break
+      case 'benchwarmer': hasBenchwarmer = true; break
+      case 'all_in': hasAllIn = true; break
     }
   }
   
+  // DOMINO BONUS: all_in upgrades it to ×3.0
+  const dominoBonus = handEmpty && brokenLinks === 0
+  const dominoMultiplier = dominoBonus ? (hasAllIn ? 3.0 : 1.75) : 1.0
+
   // Apply chain bonus upgrade (Long Link: +1.5 per tile instead of +1)
   let adjustedChainMult = finalChainMult
   if (hasLongLink) {
@@ -248,9 +282,10 @@ export function calculateMultiplier(
   total *= perfectLoopMultiplier
 
   // gold_to_multiplier: per 5 gold, +1.25x
+  let compoundInterestBonus = 0
   if (hasGoldToMultiplier && currency > 0) {
-    const goldMult = 1 + Math.floor(currency / 5) * 0.25
-    total *= goldMult
+    compoundInterestBonus = 1 + Math.floor(currency / 5) * 0.25
+    total *= compoundInterestBonus
   }
 
   // lean_machine: +70 base pips if hand size <= 3 (applied as score bonus in base, but
@@ -258,16 +293,22 @@ export function calculateMultiplier(
   // lean_machine is handled in calculateBaseScore via extraBase param passed from round.ts)
 
   // binary_code: ×1.5 if all played tiles are only 0s and 1s
+  let binaryCodeTriggered = false
   if (hasBinaryCode && tiles.length > 0) {
     const allBinary = tiles.every(pt => !pt.brokenLink &&
       (pt.tile.left === 0 || pt.tile.left === 1) &&
       (pt.tile.right === 0 || pt.tile.right === 1))
-    if (allBinary) total *= 1.5
+    if (allBinary) { total *= 1.5; binaryCodeTriggered = true }
   }
 
   // double_or_nothing: halve score if no Domino! bonus
   if (hasDoubleOrNothing && !dominoBonus) {
     total *= 0.5
+  }
+
+  // benchwarmer: ×1.25 per unplayed tile, negated if Domino!
+  if (hasBenchwarmer && !dominoBonus && hand.length > 0) {
+    total *= Math.pow(1.25, hand.length)
   }
 
   // Apply multiplier bonus upgrade
@@ -282,6 +323,8 @@ export function calculateMultiplier(
     brokenLinks,
     dominoBonus,
     perfectLoopBonus: perfectLoopMultiplier > 1.0,
+    binaryCodeBonus: binaryCodeTriggered,
+    compoundInterestBonus,
     total
   }
 }
@@ -296,9 +339,11 @@ export function calculateFinalScore(
   items: ShopItem[] = [],
   anchorTile?: Tile | null,
   handSize: number = 0,
-  currency: number = 0
+  currency: number = 0,
+  hand: Tile[] = [],
+  phenomenalEvilBonus: number = 0
 ): number {
-  const baseScore = calculateBaseScore(chain, bossModifier, items, anchorTile, currency, handSize)
-  const multiplier = calculateMultiplier(chain, bossModifier, handEmpty, items, handSize, anchorTile, currency)
+  const baseScore = calculateBaseScore(chain, bossModifier, items, anchorTile, currency, handSize, hand, phenomenalEvilBonus)
+  const multiplier = calculateMultiplier(chain, bossModifier, handEmpty, items, handSize, anchorTile, currency, hand)
   return Math.floor(baseScore * multiplier.total)
 }

@@ -11,13 +11,14 @@ interface ScorePanelProps {
   items?: ShopItem[]
   anchorTile?: Tile | null
   currency?: number
+  phenomenalEvilBonus?: number
 }
 
-export function ScorePanel({ lastScore, chain, hand, roundScore, targetScore, bossModifier, items = [], anchorTile = null, currency = 0 }: ScorePanelProps) {
-  const base = calculateBaseScore(chain, bossModifier, items, anchorTile, currency, hand.length)
+export function ScorePanel({ lastScore, chain, hand, roundScore, targetScore, bossModifier, items = [], anchorTile = null, currency = 0, phenomenalEvilBonus = 0 }: ScorePanelProps) {
+  const base = calculateBaseScore(chain, bossModifier, items, anchorTile, currency, hand.length, hand, phenomenalEvilBonus)
   const handEmpty = hand.length === 0
-  const mult = calculateMultiplier(chain, bossModifier, handEmpty, items, hand.length, anchorTile, currency)
-  const final = calculateFinalScore(chain, bossModifier, handEmpty, items, anchorTile, hand.length, currency)
+  const mult = calculateMultiplier(chain, bossModifier, handEmpty, items, hand.length, anchorTile, currency, hand)
+  const final = calculateFinalScore(chain, bossModifier, handEmpty, items, anchorTile, hand.length, currency, hand, phenomenalEvilBonus)
 
   return (
     <div style={{ fontFamily: 'monospace', fontSize: 14, color: '#cdd6f4', display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -56,6 +57,16 @@ export function ScorePanel({ lastScore, chain, hand, roundScore, targetScore, bo
           {mult.perfectLoopBonus && (
             <div style={{ color: '#f9e2af', fontWeight: 'bold' }}>
               🔁 Perfect Loop: <span style={{ color: '#f9e2af' }}>×2.0</span>
+            </div>
+          )}
+          {mult.binaryCodeBonus && (
+            <div style={{ color: '#89dceb', fontWeight: 'bold' }}>
+              💻 Binary Code: <span style={{ color: '#89dceb' }}>×1.5</span>
+            </div>
+          )}
+          {mult.compoundInterestBonus > 0 && (
+            <div style={{ color: '#f9e2af', fontWeight: 'bold' }}>
+              💰 Compound Interest: <span style={{ color: '#f9e2af' }}>×{mult.compoundInterestBonus.toFixed(2)}</span>
             </div>
           )}
           <div style={{ borderTop: '1px solid #45475a', paddingTop: 2 }}>
